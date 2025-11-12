@@ -7,7 +7,7 @@
 
 **Geographic:** Sydney/NSW only
 **Platform:** iOS 16+, Swift/SwiftUI
-**Backend:** FastAPI (Python), PostgreSQL, Redis, Next.js (static) for marketing
+**Backend:** FastAPI (Python), Supabase (PostgreSQL + Auth + Storage), Redis, Next.js (static) for marketing
 **Data:** NSW GTFS (227MB) + NSW Trip Planner API
 **App Size:** <50MB initial download, optional offline data
 
@@ -222,10 +222,11 @@
 ```
 
 ### Data Flow
-1. **Static GTFS:** Daily sync from NSW → PostgreSQL → SQLite export for iOS
+1. **Static GTFS:** Daily sync from NSW → Supabase (PostgreSQL) → SQLite export for iOS
 2. **Real-time:** iOS polls FastAPI → FastAPI caches NSW GTFS-RT (Redis, 15s TTL via Celery worker)
 3. **Trip planning:** iOS → FastAPI → NSW Trip Planner API → Cache → iOS
-4. **Favorites:** CloudKit sync (no backend needed)
+4. **Favorites:** Supabase (backend sync) or CloudKit (iOS-only) - Oracle decides best approach
+5. **Authentication:** Supabase Auth with Apple Sign-In integration
 
 ---
 
