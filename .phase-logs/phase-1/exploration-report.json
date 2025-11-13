@@ -1,0 +1,256 @@
+{
+  "phase_summary": "Phase 1 builds offline GTFS static data pipeline + iOS browsing UI. Backend parses 227MB GTFS→Supabase pattern model (<350MB), generates 15-20MB iOS SQLite with FTS5 search. iOS adds GRDB, stop/route browsing, offline-first. No real-time yet.",
+  "key_decisions": [
+    {
+      "decision": "Pattern model for GTFS compression (8-15× smaller)",
+      "rationale": "Reduces stop_times 100MB+ → 10-15MB by factoring trips into patterns with offsets. Required for iOS bundle <50MB target.",
+      "reference": "DATA_ARCHITECTURE.md:Section 5.4.3, 6",
+      "critical_constraint": "Must achieve <350MB Supabase, 15-20MB iOS SQLite. Sydney filtering (bbox [-34.5,-33.3] × [150.5,151.5]) reduces by 40-60%."
+    },
+    {
+      "decision": "PostGIS spatial indexes for location queries",
+      "rationale": "Nearby stops query (<50ms) requires GIST index on geography type. NSW API returns lat,lon but PostGIS uses lon,lat order.",
+      "reference": "DATA_ARCHITECTURE.md:Section 6, PHASE_1:L176-199",
+      "critical_constraint": "Auto-populate location column via trigger (ST_MakePoint(lon,lat)). Verify NULL locations = 0."
+    },
+    {
+      "decision": "iOS SQLite dictionary encoding (text IDs → ints)",
+      "rationale": "Text stop_ids ('200060') → int (sid) saves 30-40% space. WITHOUT ROWID tables reduce overhead. FTS5 for search.",
+      "reference": "DATA_ARCHITECTURE.md:Section 6, PHASE_1:L308-369",
+      "critical_constraint": "dict_route, dict_stop mapping tables required. FTS5 tokenize='porter' for stop name search."
+    },
+    {
+      "decision": "Bundle gtfs.db in iOS app (Phase 1 only)",
+      "rationale": "Simplifies MVP - no download logic yet. Phase 2 adds CDN download + version check. Accept >50MB initial install for speed.",
+      "reference": "PHASE_1:L572-575",
+      "critical_constraint": "Copy to Resources/, verify in Copy Bundle Resources build phase. Phase 2 refactor to download."
+    },
+    {
+      "decision": "Supabase RPC for raw SQL (pattern queries)",
+      "rationale": "Pattern model queries (JOIN trips→pattern_stops→routes) too complex for Supabase JS query builder. Use exec_raw_sql RPC.",
+      "reference": "PHASE_1:L419-425, L474-487",
+      "critical_constraint": "Must create exec_raw_sql RPC in Supabase SQL editor. Parameterized queries ($1, $2) prevent injection."
+    }
+  ],
+  "previous_phase_state": {
+    "completed": [
+      "Backend: FastAPI + structlog JSON logging",
+      "Backend: Supabase + Redis clients (singletons)",
+      "Backend: /health endpoint (degraded OK with dummy creds)",
+      "Backend: / endpoint (API message + version)",
+      "iOS: Xcode project structure",
+      "iOS: SPM dependencies (supabase-swift 2.37.0, swift-log 1.6.4)",
+      "iOS: Config.plist + Constants.swift",
+      "iOS: Logger.app wrapper (swift-log)",
+      "iOS: HomeView placeholder with backend fetch",
+      "Integration: iOS→Backend hello-world verified"
+    ],
+    "files_created": [
+      "backend/app/main.py",
+      "backend/app/config.py",
+      "backend/app/db/supabase_client.py",
+      "backend/app/db/redis_client.py",
+      "backend/app/utils/logging.py",
+      "backend/requirements.txt",
+      "backend/.env.example",
+      "SydneyTransit/SydneyTransit/SydneyTransitApp.swift",
+      "SydneyTransit/SydneyTransit/Core/Utilities/Constants.swift",
+      "SydneyTransit/SydneyTransit/Core/Utilities/Logger.swift",
+      "SydneyTransit/SydneyTransit/Features/Home/HomeView.swift"
+    ],
+    "current_state": "Backend running :8000 (health degraded, Redis dummy creds). iOS builds, HomeView fetches backend message. Phase 0 acceptance 11/12 passed (simulator GUI test skipped).",
+    "blockers": [
+      "User must add real Supabase creds to backend/.env.local",
+      "User must download 227MB GTFS dataset (NSW API or archive)",
+      "User must create Supabase RPC exec_raw_sql for pattern queries"
+    ]
+  },
+  "checkpoints": [
+    {
+      "name": "GTFS Parser + Pattern Model",
+      "goal": "Parse GTFS CSV → pattern model, Sydney filter, validate counts",
+      "backend_work": [
+        "Add gtfs-kit==6.0.0 to requirements.txt",
+        "Create app/services/gtfs_service.py (parse CSV, validate spec)",
+        "Implement extract_patterns() (group trips by stop_seq, median offsets)",
+        "Sydney filtering (bbox [-34.5,-33.3] × [150.5,151.5])",
+        "Log stats: stops, routes, patterns, trips counts"
+      ],
+      "ios_work": [],
+      "validation": "python -c 'from app.services.gtfs_service import parse_gtfs; parse_gtfs(\"~/Downloads/gtfs-sydney\")' # Expect 10k-25k stops, 400-1200 routes, 2k-10k patterns"
+    },
+    {
+      "name": "Supabase Schema Migration",
+      "goal": "Create pattern tables with PostGIS, execute migration",
+      "backend_work": [
+        "Create schemas/migrations/001_initial_schema.sql",
+        "Tables: agencies, routes, stops (w/ PostGIS location), patterns, pattern_stops, trips, calendar, calendar_dates, gtfs_metadata",
+        "Trigger: update_stop_location() auto-populate geography",
+        "Indexes: GIST(location), GIN(stop_name FTS), pattern_id, service_id",
+        "Execute in Supabase SQL Editor"
+      ],
+      "ios_work": [],
+      "validation": "SELECT table_name FROM information_schema.tables WHERE table_schema='public'; # Verify 9 tables, SELECT PostGIS_version();"
+    },
+    {
+      "name": "GTFS Loader Task",
+      "goal": "Load parsed GTFS → Supabase, verify DB size <350MB",
+      "backend_work": [
+        "Create app/tasks/gtfs_static_sync.py",
+        "Parse GTFS (reuse gtfs_service)",
+        "Bulk insert: supabase.table('routes').upsert(routes_list).execute()",
+        "Insert gtfs_metadata (feed_version, dates)",
+        "Run manually: load_gtfs_static(gtfs_path='~/Downloads/gtfs-sydney/')"
+      ],
+      "ios_work": [],
+      "validation": "SELECT COUNT(*) FROM stops; # 10k-25k, SELECT COUNT(*) FROM routes; # 400-1200, Check Supabase dashboard DB size <350MB"
+    },
+    {
+      "name": "iOS SQLite Generator",
+      "goal": "Generate 15-20MB SQLite with dict encoding + FTS5",
+      "backend_work": [
+        "Create app/services/ios_db_generator.py",
+        "Query Supabase pattern tables",
+        "Transform: text IDs→ints (dict_route, dict_stop)",
+        "WITHOUT ROWID tables, bit-packed calendar.days",
+        "PRAGMA journal_mode=OFF, page_size=8192, VACUUM",
+        "FTS5: CREATE VIRTUAL TABLE stops_fts USING fts5(sid, name, tokenize='porter')",
+        "Output to backend/ios_output/gtfs.db"
+      ],
+      "ios_work": [],
+      "validation": "ls -lh backend/ios_output/gtfs.db # 15-20MB, sqlite3 gtfs.db 'SELECT COUNT(*) FROM stops;' # Match Supabase"
+    },
+    {
+      "name": "Stops API Endpoints",
+      "goal": "GET /stops/nearby, /stops/{id}, /stops/search, /stops/{id}/departures",
+      "backend_work": [
+        "Create app/api/v1/stops.py",
+        "nearby: PostGIS ST_DWithin query (lat,lon→lon,lat swap!)",
+        "stop: Simple select by stop_id",
+        "search: textSearch on stop_name (PostgreSQL FTS)",
+        "departures: Pattern model query (JOIN pattern_stops→trips→routes, filter by now_secs)",
+        "Register router in main.py"
+      ],
+      "ios_work": [],
+      "validation": "curl 'http://localhost:8000/api/v1/stops/nearby?lat=-33.8615&lon=151.2106&radius=500' # Returns Circular Quay stops"
+    },
+    {
+      "name": "Routes + GTFS API Endpoints",
+      "goal": "GET /routes, /routes/{id}, /gtfs/version, /gtfs/download",
+      "backend_work": [
+        "Create app/api/v1/routes.py (list, get by id)",
+        "Create app/api/v1/gtfs.py (version from gtfs_metadata, FileResponse for gtfs.db)",
+        "Register routers in main.py"
+      ],
+      "ios_work": [],
+      "validation": "curl http://localhost:8000/api/v1/routes # Returns routes, curl -O http://localhost:8000/api/v1/gtfs/download # Downloads gtfs.db"
+    },
+    {
+      "name": "iOS GRDB Setup + Models",
+      "goal": "Bundle gtfs.db, create DatabaseManager, Stop/Route models",
+      "backend_work": [],
+      "ios_work": [
+        "Add GRDB via SPM (6.22.0+)",
+        "Copy backend/ios_output/gtfs.db → SydneyTransit/Resources/gtfs.db",
+        "Add to Xcode (Copy Bundle Resources)",
+        "Create Core/Database/DatabaseManager.swift (singleton, Bundle.main.path)",
+        "Create Data/Models/Stop.swift (Codable, FetchableRecord, search() FTS5)",
+        "Create Data/Models/Route.swift"
+      ],
+      "validation": "iOS builds, no GRDB import errors, Logger.app.info('DB loaded') in onAppear"
+    },
+    {
+      "name": "iOS Search UI",
+      "goal": "SearchView with FTS5 stop search",
+      "backend_work": [],
+      "ios_work": [
+        "Create Features/Search/SearchView.swift",
+        "@State query + results",
+        ".searchable modifier",
+        "performSearch(): DatabaseManager.shared.read { Stop.search(db, query) }",
+        "NavigationLink → StopDetailsView"
+      ],
+      "validation": "Type 'circular' → Circular Quay appears, search <200ms"
+    },
+    {
+      "name": "iOS Stop Details + Route List",
+      "goal": "StopDetailsView, RouteListView",
+      "backend_work": [],
+      "ios_work": [
+        "Create Features/Stops/StopDetailsView.swift (show name, lat/lon, mock departures)",
+        "Create Features/Routes/RouteListView.swift (fetch all routes, display type labels)",
+        "Update HomeView: NavigationLink to search, routes"
+      ],
+      "validation": "Tap stop → details show, navigate to routes → list displays, route types labeled (Train, Bus, etc.)"
+    },
+    {
+      "name": "Offline Mode Validation",
+      "goal": "Verify iOS works without network (local GRDB only)",
+      "backend_work": [],
+      "ios_work": [],
+      "validation": "Disable Mac Wi-Fi, relaunch iOS app, search works, stop details show (no API calls yet)"
+    }
+  ],
+  "critical_patterns": [
+    {
+      "pattern": "Supabase singleton client (Phase 0)",
+      "example_location": "backend/app/db/supabase_client.py:L10-25",
+      "reference": "DEVELOPMENT_STANDARDS.md:Section 2.3.1"
+    },
+    {
+      "pattern": "Structured logging (JSON events, no PII)",
+      "example_location": "backend/app/utils/logging.py:L10-30",
+      "reference": "DEVELOPMENT_STANDARDS.md:Section 4.1"
+    },
+    {
+      "pattern": "API response envelope (data + meta)",
+      "example_location": "INTEGRATION_CONTRACTS.md:L42-50",
+      "reference": "DEVELOPMENT_STANDARDS.md:Section 2.2"
+    },
+    {
+      "pattern": "GRDB read-only singleton (iOS)",
+      "example_location": "PHASE_1:L578-600",
+      "reference": "IOS_APP_SPECIFICATION.md:Section 4.2"
+    },
+    {
+      "pattern": "iOS Logger wrapper (swift-log → OSLog)",
+      "example_location": "SydneyTransit/SydneyTransit/Core/Utilities/Logger.swift",
+      "reference": "DEVELOPMENT_STANDARDS.md:Section 4.2"
+    }
+  ],
+  "ios_research_needed": [
+    "GRDB FTS5 MATCH syntax (stops_fts MATCH query tokenization)",
+    "WITHOUT ROWID performance vs regular tables (15-20% size reduction claim)",
+    "Bundle.main.path read-only mode (?mode=ro&immutable=1 for concurrency)",
+    "SwiftUI .searchable debouncing (avoid FTS5 query on every keystroke)"
+  ],
+  "external_services_research": [
+    "Supabase RPC creation (how to add exec_raw_sql function in SQL editor)",
+    "Supabase free tier limits (500MB DB, query concurrency, PostGIS extensions)",
+    "NSW API GTFS download endpoint rate limits (5 req/s applies to downloads?)",
+    "PostGIS ST_DWithin units (meters vs degrees, geography vs geometry)"
+  ],
+  "user_blockers": [
+    "Must download 227MB GTFS dataset (5 zip files: trains, buses, ferries, light rail, metro)",
+    "Must provide unzipped path to AI (e.g., ~/Downloads/gtfs-sydney/)",
+    "Must have Supabase project with real creds in backend/.env.local",
+    "Must create Supabase RPC exec_raw_sql (AI will provide SQL, user executes in SQL Editor)",
+    "Must install Xcode 15+ (GRDB requires Swift 5.9+)"
+  ],
+  "acceptance_criteria": [
+    "Backend: GTFS data loaded to Supabase (<350MB total)",
+    "Backend: Pattern model implemented (SELECT COUNT(*) FROM patterns; # 2k-10k)",
+    "Backend: iOS SQLite generated (15-20MB, backend/ios_output/gtfs.db exists)",
+    "Backend: GET /api/v1/stops/nearby returns Circular Quay stops",
+    "Backend: GET /api/v1/stops/200060/departures returns scheduled departures",
+    "Backend: GET /api/v1/routes returns 400-1200 routes",
+    "Backend: GET /api/v1/gtfs/version returns feed_version, feed_start_date",
+    "iOS: App builds without GRDB errors",
+    "iOS: Search 'circular' returns Circular Quay in <200ms",
+    "iOS: Tap stop → StopDetailsView shows name + location",
+    "iOS: RouteListView shows routes with type labels (Train, Bus, Ferry)",
+    "iOS: Offline mode works (Wi-Fi off, search still functional)",
+    "iOS: No NULL location errors in logs",
+    "iOS: gtfs.db bundled (Build Phases → Copy Bundle Resources includes gtfs.db)"
+  ]
+}
