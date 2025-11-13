@@ -120,46 +120,125 @@ echo '<subagent_json_output>' > .phase-logs/phase-{phase_number}/exploration-rep
 
 **CRITICAL: iOS training data gaps require upfront research. Do NOT skip.**
 
-If exploration report shows `ios_research_needed` items, research NOW (not during implementation):
+If exploration report shows `ios_research_needed` items, delegate research to subagent NOW (not during implementation):
 
-### 2.1 iOS Documentation Research
+### 2.1 Deploy iOS Documentation Research Subagent
 
-For each iOS research item from exploration report:
+Launch general-purpose subagent to research ALL iOS topics and produce concise findings:
 
 ```
-Use mcp__sosumi__searchAppleDocumentation or mcp__sosumi__fetchAppleDocumentation:
-- Query: "<specific iOS feature from ios_research_needed>"
-- Extract: Code examples, best practices, API patterns
-- Save findings to: .phase-logs/phase-{phase_number}/ios-research-<topic>.md
+Task tool:
+- subagent_type: "general-purpose"
+- model: "sonnet"
+- description: "iOS documentation research for Phase {phase_number}"
+- prompt: "
+Your task: Research iOS topics for Phase {phase_number} using Apple Documentation (SOSUMI MCP tools) and produce concise research files.
+
+CONTEXT:
+1. **Exploration Report:**
+   Read .phase-logs/phase-{phase_number}/exploration-report.json
+   - Focus on `ios_research_needed` array (topics requiring research)
+   - Reference `checkpoints` to understand where iOS patterns will be used
+
+2. **Phase Specification:**
+   Read oracle/phases/PHASE_{phase_number}_*.md
+   - Understand iOS implementation requirements
+   - Identify specific iOS frameworks/APIs needed
+
+RESEARCH INSTRUCTIONS:
+
+For each topic in `ios_research_needed` array:
+
+1. **Search Apple Documentation:**
+   - Use mcp__sosumi__searchAppleDocumentation with specific query
+   - Find most relevant documentation URL (prioritize: documentation > videos > general)
+
+2. **Fetch Detailed Documentation:**
+   - Use mcp__sosumi__fetchAppleDocumentation with path from search results
+   - Extract: Key patterns, code examples, API signatures, gotchas
+
+3. **Create Concise Research File:**
+   Save to: .phase-logs/phase-{phase_number}/ios-research-<topic-slug>.md
+
+   Format:
+   ```markdown
+   # iOS Research: <Topic>
+
+   ## Key Pattern
+   <2-3 sentence summary of the pattern/API>
+
+   ## Code Example
+   ```swift
+   // Minimal working example from Apple docs
+   // Include: imports, key API calls, error handling
+   ```
+
+   ## Critical Constraints
+   - <Must-follow rule 1>
+   - <Must-follow rule 2>
+   - <Performance/compatibility consideration>
+
+   ## Common Gotchas
+   - <Pitfall 1 and how to avoid>
+   - <Pitfall 2 and how to avoid>
+
+   ## API Reference
+   - Apple docs: <URL or path>
+   - Related APIs: <List if relevant>
+
+   ## Relevance to Phase {phase_number}
+   <1-2 sentences explaining where this will be used in checkpoints>
+   ```
+
+4. **Token Budget per Research File:**
+   - Max 500 tokens per file
+   - Focus on actionable patterns (not comprehensive docs)
+   - Prioritize code examples and gotchas
+
+RESEARCH TOPICS (from exploration report):
+<You will read these from exploration-report.json ios_research_needed array>
+
+Common topics you may encounter:
+- SwiftUI: Views, navigation, state management (@Published, @State, @ObservedObject), List/LazyVStack, .refreshable modifier
+- GRDB: FTS5 full-text search, WITHOUT ROWID optimization, database migrations, query patterns
+- MapKit: MKMapView, annotations, polylines, coordinate regions, user location
+- URLSession: async/await data tasks, error handling, timeout configuration, URLError types
+- Keychain: SecItemAdd/Update/Delete, kSecClass attributes, secure token storage
+- UserNotifications: UNUserNotificationCenter, APNs registration, notification handling
+- Core Location: CLLocationManager, authorization, nearby queries, background location
+
+VALIDATION:
+- Each research file must have: Key Pattern, Code Example, Critical Constraints, Common Gotchas, API Reference
+- Code examples must compile (check Swift syntax)
+- All files saved to .phase-logs/phase-{phase_number}/
+
+RETURN FORMAT (JSON):
+{
+  \"topics_researched\": [
+    {
+      \"topic\": \"SwiftUI refreshable modifier\",
+      \"file\": \".phase-logs/phase-{phase_number}/ios-research-swiftui-refreshable.md\",
+      \"key_finding\": \"1-sentence summary of critical pattern\",
+      \"apple_docs_url\": \"https://developer.apple.com/documentation/...\"
+    }
+  ],
+  \"research_complete\": true,
+  \"blockers\": []
+}
+
+DO NOT:
+- Write generic tutorials (focus on specific patterns needed)
+- Copy full Apple documentation (extract essentials)
+- Research topics not in ios_research_needed array
+- Hallucinate API patterns (always use SOSUMI tools)
+"
 ```
 
-**Topics requiring mandatory research:**
-- SwiftUI: Views, navigation, state management, List/LazyVStack
-- GRDB: Queries, FTS5, WITHOUT ROWID, migrations
-- MapKit: Annotations, polylines, coordinate regions
-- URLSession: async/await patterns, error handling
-- Keychain: Secure token storage
-- UserNotifications: APNs registration, handling
-- Core Location: Permission, nearby queries
+**Wait for subagent completion.**
 
-**Format findings concisely:**
-```markdown
-# iOS Research: <Topic>
-
-## Key Pattern
-<2-3 sentence summary>
-
-## Code Example
-```swift
-// Minimal working example from Apple docs
-```
-
-## Gotchas
-- Critical constraint 1
-- Critical constraint 2
-
-## Reference
-- Apple docs: <URL or path>
+**Save research summary:**
+```bash
+echo '<subagent_json_output>' > .phase-logs/phase-{phase_number}/ios-research-summary.json
 ```
 
 ---

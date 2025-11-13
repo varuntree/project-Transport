@@ -47,8 +47,11 @@ phase_number: $1
 
 3. **iOS research (if exists):**
    ```bash
-   ls .phase-logs/phase-{phase_number}/ios-research-*.md
-   # Read into context (each ~500 tokens)
+   # Check research summary
+   cat .phase-logs/phase-{phase_number}/ios-research-summary.json
+
+   # Load research files referenced in checkpoints (on-demand)
+   # Do NOT load all at once - load per checkpoint as needed
    ```
 
 **Total orchestrator context: ~5K tokens (stays constant throughout)**
@@ -184,7 +187,8 @@ PREVIOUS CHECKPOINT RESULT (if N > 1):
 
 REFERENCES (Read if needed):
 - Exploration patterns: .phase-logs/phase-{phase_number}/exploration-report.json → critical_patterns
-- iOS research: .phase-logs/phase-{phase_number}/ios-research-<topic>.md
+- iOS research: .phase-logs/phase-{phase_number}/ios-research-summary.json (see which files exist)
+  - Load specific research file: .phase-logs/phase-{phase_number}/ios-research-<topic>.md (only if checkpoint needs it)
 - Standards: DEVELOPMENT_STANDARDS.md (specific sections in design)
 - Architecture specs: <From design references>
 - Example code: <From exploration report example_location>
@@ -207,10 +211,10 @@ Before implementing any pattern/library/API:
 - NEVER hallucinate - if confidence <80%, READ the reference docs
 
 If uncertain:
-- iOS patterns → Read .phase-logs/phase-{phase_number}/ios-research-<topic>.md
+- iOS patterns → Check .phase-logs/phase-{phase_number}/ios-research-summary.json for relevant topic, then read that specific research file
 - Backend patterns → Read DEVELOPMENT_STANDARDS.md section
 - External service → Use WebFetch or search for official docs
-- Return "blocked" status if truly stuck (don't guess)
+- Return "blocked" status if truly stuck (don't guess, NEVER hallucinate iOS APIs)
 
 DO NOT:
 - Commit to git (orchestrator handles)
