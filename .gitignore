@@ -214,6 +214,8 @@ complete_gtfs.zip
 backend/logs/
 backend/*.db
 backend/celerybeat-schedule
+backend/temp/
+ios_output/
 
 # ============================================
 # Documentation Builds
