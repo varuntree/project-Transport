@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.utils.logging import configure_logging, get_logger
 from app.db.supabase_client import test_supabase_connection
 from app.db.redis_client import test_redis_connection
+from app.api.v1 import stops
 
 # Configure logging at module level
 configure_logging()
@@ -50,6 +51,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Register API routers
+app.include_router(stops.router, prefix="/api/v1", tags=["stops"])
 
 @app.get("/")
 async def root():
