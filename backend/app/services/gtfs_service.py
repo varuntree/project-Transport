@@ -262,10 +262,17 @@ def _apply_sydney_filter(data: Dict) -> Dict:
         trips_after=len(sydney_trips)
     )
 
+    # Deduplicate stops (some stops appear in multiple mode feeds)
+    # Keep first occurrence (based on order: trains, metro, buses, ferries, lightrail)
+    sydney_stops_dedup = sydney_stops.drop_duplicates(subset=["stop_id"], keep="first")
+    deduplicated_count = len(sydney_stops) - len(sydney_stops_dedup)
+    if deduplicated_count > 0:
+        logger.info("stops_deduplicated", duplicates_removed=deduplicated_count)
+
     # Convert to list of dicts for easier Supabase insertion
     result = {
         "agencies": data["agencies"].to_dict("records"),
-        "stops": sydney_stops.to_dict("records"),
+        "stops": sydney_stops_dedup.to_dict("records"),
         "routes": sydney_routes.to_dict("records"),
         "trips": sydney_trips,  # Keep as DataFrame for pattern extraction
         "stop_times": sydney_stop_times,  # Keep as DataFrame
@@ -355,9 +362,12 @@ def _extract_patterns(data: Dict) -> Dict:
     )
 
     # Calculate median offsets per pattern/stop_sequence (vectorized groupby)
+    # Group by (pattern_id, stop_sequence) - this is the primary key in DB
+    # If a stop appears twice in same pattern (circular routes), use first occurrence
     pattern_stops = (
-        stop_times.groupby(["pattern_id", "stop_id", "stop_sequence"], as_index=False)
+        stop_times.groupby(["pattern_id", "stop_sequence"], as_index=False)
         .agg({
+            "stop_id": "first",  # Use first stop_id if duplicates (shouldn't happen)
             "arrival_offset": "median",
             "departure_offset": "median"
         })
@@ -376,7 +386,21 @@ def _extract_patterns(data: Dict) -> Dict:
 
     # Prepare trips output
     trips["pattern_id"] = trips["trip_id"].map(trip_to_pattern)
-    trips_output = trips[["trip_id", "pattern_id", "service_id", "trip_headsign", "start_time_secs"]].copy()
+
+    # Include all fields needed by Supabase schema
+    output_fields = ["trip_id", "route_id", "pattern_id", "service_id", "trip_headsign"]
+
+    # Add optional fields if they exist
+    if "trip_short_name" in trips.columns:
+        output_fields.append("trip_short_name")
+    if "direction_id" in trips.columns:
+        output_fields.append("direction_id")
+    if "block_id" in trips.columns:
+        output_fields.append("block_id")
+    if "wheelchair_accessible" in trips.columns:
+        output_fields.append("wheelchair_accessible")
+
+    trips_output = trips[output_fields].copy()
     trips_output["trip_headsign"] = trips_output["trip_headsign"].fillna("")
     trips_list = trips_output.to_dict("records")
 

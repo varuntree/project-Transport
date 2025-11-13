@@ -1,0 +1,50 @@
+=== CHECKPOINT 4: GTFS LOADER VALIDATION ===
+Date: 2025-11-13
+
+PIPELINE EXECUTION:
+- Download duration: ~12s (109.32 MB from NSW API)
+- Parse duration: ~35s (30,397 stops, 4,668 routes, 12,005 patterns, 171,534 trips)
+- Load duration: ~96s (8 tables, batch size 1000)
+- Total duration: 150s (~2.5 minutes)
+
+SUPABASE DATA LOADED:
+  agencies         :       37 rows
+  routes           :    4,668 rows
+  stops            :   30,397 rows (10 duplicates removed)
+  patterns         :   12,005 rows
+  pattern_stops    :  364,863 rows
+  trips            :  171,534 rows
+  calendar         :   10,143 rows
+  calendar_dates   :    5,682 rows
+  gtfs_metadata    :        1 row
+
+DATABASE SIZE: 121 MB (65% below 350MB target)
+
+VALIDATION CHECKS (ALL PASSED):
+✓ Row counts match parser output
+✓ NULL locations = 0 (PostGIS trigger worked)
+✓ DB stops count matches loaded count
+✓ Minimum thresholds met (>10K stops, >400 routes)
+
+FEED METADATA:
+- Feed version: 2025-11-13
+- Feed date range: 2025-01-13 to 2026-12-14
+- Processed at: 2025-11-13T11:09:55Z
+
+SYDNEY FILTERING EFFECTIVENESS:
+- Stops reduced by 22% (39,151 → 30,397)
+- Trips reduced by 7% (184,837 → 171,534)
+
+PATTERN MODEL COMPRESSION:
+- Average stops per pattern: 30.7
+- Pattern-to-trip ratio: 1:14.3 (compression factor)
+- stop_times table avoided (pattern model used instead)
+
+KEY IMPLEMENTATION DETAILS:
+- Batch size: 1000 rows (optimized for Supabase)
+- Data cleaning: NaN→None, consistent keys, numpy type conversion
+- Deduplication: Stops (10 removed), pattern_stops (groupby fix)
+- Load order: Respects foreign keys (agencies→routes→stops→calendar→patterns→trips)
+
+EXECUTION COMMAND:
+python -c "from app.tasks.gtfs_static_sync import load_gtfs_static; load_gtfs_static()"
