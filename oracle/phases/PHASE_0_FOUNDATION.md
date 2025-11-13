@@ -43,11 +43,12 @@ Complete these **before** starting implementation:
 
 3. **NSW Transport API Key**
    - Register: https://opendata.transport.nsw.gov.au/
-   - Create application: "Sydney Transit App - Dev"
-   - Request API access (approved within 24 hours)
+   - Navigate: Profile → API Tokens → "CREATE API TOKEN"
+   - Token created instantly (no approval wait as of 2025)
    - Note down:
-     - API key: `apikey_xxxxxxxxxxxxx`
-   - Test API key: `curl -H "Authorization: apikey YOUR_KEY" https://api.transport.nsw.gov.au/v1/gtfs/schedule/sydneytrains/complete`
+     - API key: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` (JWT format)
+   - Test API key: `curl -H "Authorization: apikey YOUR_KEY" https://api.transport.nsw.gov.au/v1/publictransport/timetables/complete/gtfs`
+   - See `oracle/specs/NSW_API_REFERENCE.md` for complete validated endpoint catalog
 
 4. **Apple Developer Account** (Optional for Phase 0, required for Phase 3)
    - $99/year (can defer until Phase 3 for Apple Sign-In)
@@ -91,11 +92,14 @@ Complete these **before** starting implementation:
 3. Select "Provision Redis"
 4. Name: `sydney-transit-redis`
 5. Click "Deploy"
-6. Once deployed, click Redis service → Connect
-7. Copy connection URL: `redis://default:PASSWORD@HOSTNAME:PORT`
-8. Test connection locally:
+6. Once deployed, click Redis service → Variables
+7. **IMPORTANT:** Railway provides TWO Redis URLs:
+   - **Private URL** (`redis://...railway.internal`): Only works inside Railway network
+   - **Public URL** (`redis://...rlwy.net:PORT`): **Use this for local development**
+8. Copy **REDIS_PUBLIC_URL** (not REDIS_PRIVATE_URL)
+9. Test connection locally:
    ```bash
-   redis-cli -u redis://default:PASSWORD@HOSTNAME:PORT
+   redis-cli -u redis://default:PASSWORD@HOSTNAME.rlwy.net:PORT
    # Should connect, type: PING
    # Expected: PONG
    ```
@@ -104,49 +108,53 @@ Complete these **before** starting implementation:
 
 1. Go to https://opendata.transport.nsw.gov.au/
 2. Register account (or log in)
-3. Dashboard → Create Application
-4. Fill form:
-   - App Name: Sydney Transit App - Dev
-   - Description: iOS transit app for Sydney
-   - Estimated API calls: 50K/month
-5. Submit (approval within 24 hours, check email)
-6. Once approved, copy API key from dashboard
-7. Test API key:
+3. Click profile icon (top-right) → **API Tokens**
+4. Enter token name: "Sydney Transit App - Dev"
+5. Click **CREATE API TOKEN**
+6. **Copy token immediately** (shown only once, JWT format)
+7. **No dataset subscription needed** (2025 update: automatic access to all open GTFS/GTFS-RT datasets)
+8. Test API key:
    ```bash
    curl -H "Authorization: apikey YOUR_API_KEY" \
-     https://api.transport.nsw.gov.au/v1/gtfs/alerts/buses
+     https://api.transport.nsw.gov.au/v2/gtfs/alerts/all
    ```
-   - Should return JSON (GTFS-RT alerts feed)
-   - If 401: Invalid key
-   - If 403: Rate limit (wait 1 second, retry)
+   - Should return binary GTFS-RT data
+   - If 401: Invalid key or wrong format
+   - If 403: Rate limit (wait, retry)
+
+**Note:** See `oracle/specs/NSW_API_REFERENCE.md` for complete validated endpoint list (48 endpoints tested 2025-11-13)
 
 ### Step 4: Create Environment Variables File
 
-Create `.env` file in project root (AI agent will reference this):
+Create `.env.local` file in project root:
 
 ```bash
-# .env (NEVER commit to git)
+# .env.local (NEVER commit to git)
 
 # Supabase
 SUPABASE_URL=https://xxxxx.supabase.co
 SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
-# Redis
-REDIS_URL=redis://default:password@redis.railway.app:6379
-
-# NSW Transport API
-NSW_API_KEY=apikey_xxxxxxxxxxxxx
+# Redis (Railway - use PUBLIC URL)
+REDIS_URL=redis://default:password@xxxx.rlwy.net:PORT
 
 # Celery (same as Redis)
-CELERY_BROKER_URL=redis://default:password@redis.railway.app:6379
+CELERY_BROKER_URL=redis://default:password@xxxx.rlwy.net:PORT
+
+# NSW Transport API (JWT format)
+NSW_API_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 # Environment
 ENVIRONMENT=development
 LOG_LEVEL=DEBUG
 ```
 
-**Security:** Create `.env.example` (without real values) and commit that instead.
+**Notes:**
+- Using `.env.local` instead of `.env` (better local dev practice, common in IDEs)
+- `.env.example` is provided as safe template (commit this)
+- Ensure `.env.local` and `.env` are in `.gitignore`
+- Redis URL must be Railway's **public URL** (not private `.railway.internal`)
 
 ---
 

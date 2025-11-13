@@ -1,0 +1,231 @@
+# Sydney Transit App - Git Ignore Rules
+
+# ============================================
+# Environment Variables (NEVER COMMIT)
+# ============================================
+.env
+.env.local
+.env.*.local
+*.env
+
+# ============================================
+# Python
+# ============================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+env/
+.env/
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# ============================================
+# macOS
+# ============================================
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Icon must end with two \r
+Icon
+
+# Thumbnails
+._*
+
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# ============================================
+# iOS / Xcode
+# ============================================
+# Xcode user data
+xcuserdata/
+*.xcworkspace/xcshareddata/
+
+# Build files
+build/
+DerivedData/
+*.moved-aside
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+
+# Playgrounds
+timeline.xctimeline
+playground.xcworkspace
+
+# Swift Package Manager
+.build/
+Packages/
+Package.pins
+Package.resolved
+*.xcodeproj
+
+# CocoaPods (if used)
+Pods/
+*.xcworkspace
+
+# Carthage (if used)
+Carthage/Build/
+
+# fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# Code Injection
+iOSInjectionProject/
+
+# iOS Config (contains sensitive keys)
+Config.plist
+Config-*.plist
+
+# ============================================
+# IDE / Editors
+# ============================================
+# VSCode
+.vscode/
+*.code-workspace
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# ============================================
+# Database
+# ============================================
+*.db
+*.sqlite
+*.sqlite3
+
+# But allow bundled GTFS SQLite in iOS app
+!ios/SydneyTransit/Resources/gtfs.db
+
+# ============================================
+# Data Files (Large)
+# ============================================
+# GTFS static downloads (227MB+)
+*.zip
+gtfs_*.zip
+complete_gtfs.zip
+
+# GTFS-RT protobuf dumps
+*.pb
+*.protobuf
+
+# ============================================
+# Temporary Files
+# ============================================
+*.tmp
+*.temp
+.cache/
+.tmp/
+
+# ============================================
+# Backend Specific
+# ============================================
+backend/logs/
+backend/*.db
+backend/celerybeat-schedule
+
+# ============================================
+# Documentation Builds
+# ============================================
+docs/_build/
+site/
+
+# ============================================
+# OS Generated
+# ============================================
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/

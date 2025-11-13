@@ -42,6 +42,7 @@ All specs in `oracle/`:
 - `specs/BACKEND_SPECIFICATION.md` - FastAPI routes, Celery tasks (30s RT polling, DST-safe scheduling), rate limiting (Lua token bucket)
 - `specs/IOS_APP_SPECIFICATION.md` - MVVM structure, repositories, coordinators, offline-first
 - `specs/INTEGRATION_CONTRACTS.md` - REST API contracts, auth flow, APNs architecture (SQL alert matching, 3-layer dedup)
+- `specs/NSW_API_REFERENCE.md` - NSW Transport API endpoints (48 endpoints validated 2025-11-13), authentication, rate limits, issue resolutions
 
 **Standards:**
 - `DEVELOPMENT_STANDARDS.md` - Coding patterns, project structure, DB access, logging (structlog JSON), error handling, testing conventions
