@@ -1,0 +1,16 @@
+# Xcode
+xcuserdata/
+DerivedData/
+*.xcworkspace/xcuserdata/
+
+# Config (contains secrets)
+Config.plist
+
+# Build
+build/
+*.ipa
+*.dSYM.zip
+
+# Swift Package Manager
+.swiftpm/
+.build/
