@@ -1,6 +1,6 @@
 # Implement Phase
 
-Execute the implementation plan for the specified phase. Follow the plan step-by-step, adhere to development standards, and verify completion through testing.
+Execute implementation through orchestrator-subagent pattern. Orchestrator designs and delegates checkpoints, subagents execute with fresh context.
 
 ## Variables
 
@@ -8,330 +8,582 @@ phase_number: $1
 
 ## Instructions
 
-**IMPORTANT: Think hard. Use reasoning mode for implementation decisions.**
-
-### Step 1: Load Implementation Plan
-
-- MUST READ: `specs/phase-{phase_number}-implementation-plan.md`
-- MUST READ: `oracle/DEVELOPMENT_STANDARDS.md` (keep as reference throughout)
-- Read relevant architecture specs mentioned in plan
-
-### Step 2: Verify Prerequisites
-
-Before starting implementation:
-
-1. **Check User Setup Completed:**
-   - Review "Prerequisites → User Setup Required" section in plan
-   - Verify external services configured (accounts, API keys, etc.)
-   - If user setup incomplete, STOP and report blocker
-
-2. **Check Previous Phase Complete:**
-   - If phase_number > 0, verify previous phase deliverables exist
-   - Run environment checks from plan (backend running, Supabase connected, etc.)
-   - If prerequisites missing, STOP and report blocker
-
-3. **Check Clean Git State:**
-   - Run: `git status`
-   - If uncommitted changes exist, commit or stash first
-   - Create branch: `git checkout -b phase-{phase_number}-implementation`
-
-### Step 3: Execute Implementation Steps
-
-**CRITICAL: Execute EVERY step in the plan in exact order (top to bottom).**
-
-For each step in plan:
-
-1. **Read Step Carefully:**
-   - Understand purpose, files to create/modify, tasks
-   - Review referenced architecture specs and standards
-   - If anything unclear, re-read or ask user
-
-2. **Implement Step:**
-   - Follow DEVELOPMENT_STANDARDS.md patterns exactly
-   - Create files with correct structure (see Standards Section 1)
-   - Use proper naming conventions (see Standards Section 9)
-   - Add structured logging (see Standards Section 4)
-   - Implement error handling (see Standards Section 10)
-
-3. **Validate Step:**
-   - Run validation command from step (if provided)
-   - Verify files created/modified correctly
-   - Check for syntax errors (Python: `python -m py_compile file.py`, Swift: Cmd+B in Xcode)
-   - **Self-Validation Loop:** If validation fails:
-     - Analyze error output
-     - Fix issue immediately
-     - Re-run validation (max 2 auto-fix attempts)
-     - If still failing after 2 attempts, report blocker to user
-
-4. **Commit Progress (Atomic Commits):**
-   - Commit after EACH logical step completion (not batch commits)
-   - Each commit = trail of working state
-   - Commit message format: `feat(phase-{phase_number}): <description>` (see Standards Section 9)
-   - Example: `feat(phase-1): add GTFS parser service`
-   - Keep commits small, focused, compilable
-
-5. **Log Progress:**
-   - Use structured logging to track progress
-   - Example: `logger.info("step_complete", step="create_supabase_schema", files_created=5)`
-
-### Step 4: Implementation Guidelines
-
-**Code Quality:**
-- NO hardcoded values (use config, env variables)
-- NO duplicate code (extract to functions/classes)
-- NO skipping error handling (always try-except/Result types)
-- NO ignoring Standards (reference specific sections)
-
-**When Implementing Backend:**
-- Singleton pattern for DB clients (Standards Section 2)
-- FastAPI Depends() for dependency injection (Standards Section 3)
-- Structured logging with JSON output (Standards Section 4)
-- Celery task naming: `verb_noun` (Standards Section 5)
-- Request/response envelopes (Standards Section 3)
-
-**When Implementing iOS:**
-- MVVM + Repository + Coordinator pattern (Standards Section 6)
-- Protocol-based repositories (for testability)
-- @MainActor for ViewModels
-- Keychain for sensitive data (not UserDefaults)
-- swift-log for logging (Standards Section 4)
-
-**When Integrating:**
-- API contracts match INTEGRATION_CONTRACTS.md
-- Backend URL in iOS Config.plist
-- Auth token in Authorization header
-- Error handling on both sides (Standards Section 10)
-
-**If Blocked:**
-- If a step cannot be completed (missing dependency, error, unclear requirement):
-  1. Document the blocker clearly
-  2. STOP implementation
-  3. Report blocker to user with:
-     - Which step blocked
-     - What is needed to unblock
-     - Attempted solutions (if any)
-- DO NOT skip steps or implement workarounds without user approval
-
-### Step 5: Testing & Validation
-
-After all implementation steps complete:
-
-1. **Run Acceptance Criteria Tests:**
-   - Execute every test in "Testing Strategy" section
-   - Follow "Manual Testing Checklist" step-by-step
-   - Document pass/fail for each criterion
-
-2. **Backend Validation (if applicable):**
-   ```bash
-   # Syntax check
-   cd backend && python -m py_compile app/**/*.py
-
-   # Start server
-   uvicorn app.main:app --reload
-
-   # Health check
-   curl http://localhost:8000/health
-
-   # Test specific endpoints (from plan)
-   <run cURL commands from plan>
-   ```
-
-3. **iOS Validation (if applicable):**
-   ```bash
-   # Build check
-   # Open Xcode, Cmd+B
-
-   # Run in simulator
-   # Cmd+R
-
-   # Manual test steps (from plan)
-   # Follow checklist in simulator
-   ```
-
-4. **Integration Validation:**
-   - Backend running + iOS app running
-   - Test user flows end-to-end
-   - Verify data syncs between backend and iOS
-
-5. **Edge Cases:**
-   - Test edge cases from plan
-   - Document results
-
-**If Tests Fail:**
-- Document which test failed
-- Document error message
-- Fix issue
-- Re-run full test suite
-- DO NOT proceed to next phase with failing tests
-
-### Step 6: Final Checks
-
-1. **Code Review (Self):**
-   - Review all files changed: `git diff main..phase-{phase_number}-implementation`
-   - Check for:
-     - Hardcoded values (should use config)
-     - Missing error handling
-     - Inconsistent naming
-     - Missing logging
-     - Deviations from Standards
-
-2. **Documentation:**
-   - Update README.md if setup steps changed
-   - Update .env.example if new variables added
-   - Commit documentation changes
-
-3. **Clean Up:**
-   - Remove debug code, console.logs, print statements
-   - Remove commented-out code
-   - Remove unused imports
-   - Run linter if available (backend: `ruff check .`, iOS: SwiftLint if configured)
-
-4. **Final Commit:**
-   ```bash
-   git add .
-   git commit -m "feat(phase-{phase_number}): complete phase implementation"
-   git tag phase-{phase_number}-complete
-   ```
-
-### Step 7: Prepare for Merge
-
-**DO NOT merge to main yet - report completion first.**
-
-User will review and approve before merge.
+**IMPORTANT: Think hard. Use reasoning mode for orchestration decisions.**
 
 ---
 
-## Report
+## Architecture
 
-After implementation complete, provide detailed report.
+**Orchestrator (Main Agent):**
+- Maintains phase-level context (~5K tokens, constant)
+- Creates detailed designs for ALL checkpoints
+- Delegates execution to implementation subagents
+- Validates results, commits to git
+- Never drowns in implementation details
 
-**Optional JSON Output:** For agent chaining, can output structured JSON:
-```json
+**Implementation Subagents (Per Checkpoint):**
+- Fresh context window per checkpoint
+- Receives focused task package
+- Implements, self-validates, returns structured result
+- No git commits (orchestrator handles)
+
+---
+
+## Stage 1: Load Phase Context
+
+**Orchestrator loads (lightweight):**
+
+1. **Exploration report:**
+   ```bash
+   cat .phase-logs/phase-{phase_number}/exploration-report.json
+   ```
+   (~2K tokens - compressed reference)
+
+2. **Implementation plan:**
+   ```bash
+   cat specs/phase-{phase_number}-implementation-plan.md
+   ```
+   (~2K tokens - checkpoint structure)
+
+3. **iOS research (if exists):**
+   ```bash
+   ls .phase-logs/phase-{phase_number}/ios-research-*.md
+   # Read into context (each ~500 tokens)
+   ```
+
+**Total orchestrator context: ~5K tokens (stays constant throughout)**
+
+**Log state:**
+```bash
+echo '{"stage":"context_loaded","exploration_tokens":2000,"plan_tokens":2000}' > .phase-logs/phase-{phase_number}/orchestrator-state.json
+```
+
+---
+
+## Stage 2: Verify Prerequisites
+
+**Orchestrator checks:**
+
+1. **User blockers resolved:**
+   - Read `user_blockers` from exploration report
+   - Verify external services configured
+   - If incomplete: STOP, report blocker
+
+2. **Previous phase complete:**
+   - Read `.phase-logs/phase-{phase_number-1}/phase-completion.json` (if phase > 0)
+   - Verify deliverables exist
+   - If missing: STOP, report blocker
+
+3. **Clean git state:**
+   ```bash
+   git status
+   # If dirty: commit or stash
+   git checkout -b phase-{phase_number}-implementation
+   ```
+
+**If any prerequisite fails:** Report blocker to user, do NOT continue.
+
+---
+
+## Stage 3: Create Detailed Designs (All Checkpoints)
+
+**Orchestrator designs BEFORE delegating:**
+
+For each checkpoint from implementation plan:
+
+### Design Template
+
+Create `.phase-logs/phase-{phase_number}/checkpoint-{N}-design.md`:
+
+```markdown
+# Checkpoint {N}: <Name>
+
+## Goal
+<From plan: specific success criteria>
+
+## Approach
+<Orchestrator decides technical approach>
+
+### Backend Implementation
+- Use <library/pattern> for <functionality>
+- Files to create: <list with purposes>
+- Files to modify: <list with changes>
+- Critical pattern: <from exploration report critical_patterns>
+
+### iOS Implementation
+- Use <SwiftUI/GRDB pattern> for <functionality>
+- Files to create: <list with purposes>
+- Files to modify: <list with changes>
+- Reference iOS research: <path to research file>
+
+## Design Constraints
+<From plan + orchestrator additions>
+- Follow DEVELOPMENT_STANDARDS.md Section X for <pattern>
+- Achieve <performance/size target>
+- Handle errors: <specific approach>
+
+## Risks
+- <Potential issue 1>
+  - Mitigation: <How to avoid>
+- <Potential issue 2>
+  - Mitigation: <How to avoid>
+
+## Validation
+```bash
+<Command to verify checkpoint success>
+# Expected output: <specific result>
+```
+
+## References for Subagent
+- Exploration report: `critical_patterns` → <specific pattern>
+- iOS research: `.phase-logs/phase-{phase_number}/ios-research-<topic>.md`
+- Standards: DEVELOPMENT_STANDARDS.md:Section X
+- Architecture: <spec file>:Section Y
+- Previous checkpoint: <if depends on previous checkpoint result>
+
+## Estimated Complexity
+<simple|moderate|complex> - <reasoning>
+```
+
+**Orchestrator creates designs for ALL checkpoints before starting execution.**
+
+**Why design first:**
+- See full phase picture (can optimize handoffs)
+- Identify cross-checkpoint dependencies
+- Catch design flaws before implementation
+
+---
+
+## Stage 4: Execute Checkpoints (Delegation Loop)
+
+**For each checkpoint:**
+
+### 4.1 Package Checkpoint Task
+
+Orchestrator prepares task package:
+
+```markdown
+TASK: Implement Checkpoint {N}: <Name>
+
+PHASE CONTEXT:
+- Phase: Phase {phase_number} - <Name>
+- Overall goal: <From exploration phase_summary>
+- Your checkpoint: <Specific goal>
+
+CHECKPOINT DESIGN:
+<Paste full design from .phase-logs/phase-{phase_number}/checkpoint-{N}-design.md>
+
+PREVIOUS CHECKPOINT RESULT (if N > 1):
+<From previous subagent JSON return>
 {
-  "phase": {phase_number},
+  "status": "complete",
+  "files_created": ["..."],
+  "validation_passed": true,
+  "next_checkpoint_context": "Critical info for handoff"
+}
+
+REFERENCES (Read if needed):
+- Exploration patterns: .phase-logs/phase-{phase_number}/exploration-report.json → critical_patterns
+- iOS research: .phase-logs/phase-{phase_number}/ios-research-<topic>.md
+- Standards: DEVELOPMENT_STANDARDS.md (specific sections in design)
+- Architecture specs: <From design references>
+- Example code: <From exploration report example_location>
+
+EXECUTION GUIDELINES:
+1. Implement all files specified in design
+2. Follow DEVELOPMENT_STANDARDS.md patterns (logging, error handling, naming)
+3. Self-validate:
+   - Compile check (Python: python -m py_compile file.py, Swift: Cmd+B)
+   - Run validation command from design
+   - Fix errors (max 2 retry loops)
+   - If still failing after 2 retries: return blocker status
+4. Return structured JSON (format below)
+
+CONFIDENCE CHECK (CRITICAL):
+Before implementing any pattern/library/API:
+- Am I 80%+ confident this is correct?
+- Is this iOS-specific? → MUST have iOS research reference
+- Is this external service? → Check documentation if uncertain
+- NEVER hallucinate - if confidence <80%, READ the reference docs
+
+If uncertain:
+- iOS patterns → Read .phase-logs/phase-{phase_number}/ios-research-<topic>.md
+- Backend patterns → Read DEVELOPMENT_STANDARDS.md section
+- External service → Use WebFetch or search for official docs
+- Return "blocked" status if truly stuck (don't guess)
+
+DO NOT:
+- Commit to git (orchestrator handles)
+- Move to next checkpoint (you only do this one)
+- Read unrelated files (stay focused)
+- Implement features not in design
+- Skip error handling or logging
+
+RETURN FORMAT (JSON):
+{
   "status": "complete|blocked|partial",
-  "files_changed": <count>,
-  "tests_passed": true|false,
-  "blockers": [],
-  "next_action": "merge|fix|review"
+  "checkpoint": {checkpoint_number},
+  "files_created": ["path/to/file.py", "path/to/file.swift"],
+  "files_modified": ["path/to/existing.py"],
+  "validation": {
+    "passed": true|false,
+    "command": "<validation command run>",
+    "output": "<actual output>",
+    "issues": []
+  },
+  "blockers": [
+    {"type": "error|uncertainty|missing", "description": "...", "attempted_fixes": ["..."]}
+  ],
+  "next_checkpoint_context": "Critical info for next checkpoint (e.g., 'Generated 487 patterns in patterns table, use pattern_id foreign key')",
+  "confidence_checks": {
+    "ios_research_consulted": true|false,
+    "standards_followed": ["Section 2", "Section 4"],
+    "uncertainties_researched": ["Topic 1 - researched Apple docs"]
+  }
 }
 ```
 
-**Standard Report Format:**
+### 4.2 Delegate to Implementation Subagent
 
-### 1. Implementation Summary
-<concise bullet list of what was implemented>
-- Backend: <key features/endpoints>
-- iOS: <key views/functionality>
-- Integration: <how they connect>
-
-### 2. Files Changed
-```bash
-git diff --stat main..phase-{phase_number}-implementation
 ```
-<paste output showing files changed and line counts>
+Task tool:
+- subagent_type: "general-purpose"
+- model: "sonnet"  # CRITICAL: Must use Sonnet (not Haiku)
+- description: "Implement Checkpoint {N}: <Name>"
+- prompt: <Full task package from 4.1>
+```
 
-### 3. Testing Results
+**Wait for subagent completion.**
 
-**Acceptance Criteria:**
-- [ ] Criterion 1: <Pass/Fail> - <brief note>
-- [ ] Criterion 2: <Pass/Fail> - <brief note>
-- [ ] ...
+### 4.3 Validate Subagent Result
 
-**Tests Run:**
-- Backend tests: <Pass/Fail> - <command run>
-- iOS build: <Pass/Fail> - <Xcode result>
-- Manual tests: <Pass/Fail> - <checklist results>
+**Orchestrator independently verifies:**
 
-**Edge Cases:**
-- Edge case 1: <Pass/Fail>
-- Edge case 2: <Pass/Fail>
+1. **Check files exist:**
+   ```bash
+   ls -la <files from subagent files_created>
+   # Verify not hallucinated
+   ```
 
-### 4. Blockers Encountered
-<list any blockers hit during implementation>
-<how they were resolved or if they need user action>
+2. **Run validation command:**
+   ```bash
+   <validation command from checkpoint design>
+   # Compare output to expected
+   ```
 
-**If None:** No blockers encountered
+3. **Compile check (if applicable):**
+   ```bash
+   # Backend
+   cd backend && python -m py_compile <files>
 
-### 5. Deviations from Plan
-<list any intentional deviations from implementation plan>
-<explain why deviation was necessary>
+   # iOS (if Xcode available)
+   xcodebuild -scheme SydneyTransit -sdk iphonesimulator build
+   ```
 
-**If None:** Implementation followed plan exactly
+4. **Compare subagent report vs actual state:**
+   - If subagent said "complete" but validation fails → Issue detected
+   - If files missing → Subagent hallucinated
 
-### 6. Known Issues
-<list any known issues or technical debt introduced>
-<plan for addressing in future phases>
+**If validation fails:**
+- **Option 1:** Retry subagent (same design, add error context)
+- **Option 2:** Redesign checkpoint (orchestrator adjusts design)
+- **Option 3:** Escalate to user (true blocker)
 
-**If None:** No known issues
+**Retry once, then escalate.**
 
-### 7. Screenshots (If Applicable for iOS)
-<if iOS UI was implemented, describe what screens work>
-<note: actual screenshots taken manually by user during testing>
+### 4.4 Commit Checkpoint (Atomic)
 
-### 8. Next Steps
+**Orchestrator commits (not subagent):**
 
-**Ready for Merge:**
-- Yes/No
-- If Yes: `git checkout main && git merge phase-{phase_number}-implementation`
-- If No: <what needs to be fixed before merge>
+```bash
+git add .
 
-**Ready for Next Phase:**
-- Yes/No
-- If Yes: Next phase is Phase {phase_number + 1}
-- If No: <what needs completion or user action>
+# Save subagent result
+echo '<subagent_json>' > .phase-logs/phase-{phase_number}/checkpoint-{N}-result.json
 
-### 9. Recommendations
-<any recommendations for next phase or improvements>
+git add .phase-logs/phase-{phase_number}/
+
+git commit -m "feat(phase-{phase_number}): checkpoint {N} - <name>
+
+<Brief description of what was implemented>
+
+Validation: <validation result>
+Files: <count> created, <count> modified"
+
+# Tag checkpoint
+git tag phase-{phase_number}-checkpoint-{N}
+```
+
+**Why orchestrator commits:**
+- Clean git history (not polluted by subagent)
+- Orchestrator control (can rollback if needed)
+- Includes checkpoint result JSON (full audit trail)
+
+### 4.5 Update Orchestrator State
+
+```bash
+# Update state for next checkpoint
+echo '{
+  "checkpoint_completed": {checkpoint_number},
+  "status": "<from subagent>",
+  "files_created": <count>,
+  "next_checkpoint_context": "<from subagent result>"
+}' >> .phase-logs/phase-{phase_number}/orchestrator-state.json
+```
+
+### 4.6 Repeat for Next Checkpoint
+
+Load next checkpoint design, package task (include previous result), delegate.
 
 ---
 
-## Example Report
+## Stage 5: Final Validation
+
+**After all checkpoints complete:**
+
+### 5.1 Run Full Acceptance Criteria
+
+From implementation plan acceptance criteria:
+
+```bash
+# Backend tests (if applicable)
+curl http://localhost:8000/health
+curl http://localhost:8000/api/v1/<endpoints from plan>
+
+# iOS tests (if applicable)
+# Xcode: Cmd+B (build), Cmd+R (run simulator)
+# Manual testing checklist from plan
+
+# Integration tests
+# Backend + iOS working together
+```
+
+**Document results:**
+```json
+{
+  "acceptance_criteria": [
+    {"criterion": "...", "passed": true, "notes": "..."},
+    {"criterion": "...", "passed": false, "error": "..."}
+  ]
+}
+```
+
+**If any criterion fails:**
+- Identify which checkpoint failed
+- Redesign + re-execute that checkpoint
+- Re-run full acceptance criteria
+
+**DO NOT proceed if tests fail.**
+
+### 5.2 Final Commit
+
+```bash
+git add .
+git commit -m "feat(phase-{phase_number}): complete phase implementation
+
+All checkpoints: <N> completed
+Acceptance criteria: <X>/<Y> passed
+Files: <count> created, <count> modified"
+
+git tag phase-{phase_number}-complete
+```
+
+---
+
+## Stage 6: Create Phase Completion Report
+
+**Orchestrator generates:**
+
+`.phase-logs/phase-{phase_number}/phase-completion.json`:
+
+```json
+{
+  "phase": {phase_number},
+  "status": "complete|partial|blocked",
+  "checkpoints": [
+    {
+      "number": 1,
+      "name": "...",
+      "status": "complete",
+      "validation_passed": true,
+      "files_created": 5,
+      "commit": "abc123"
+    }
+  ],
+  "acceptance_criteria": {
+    "total": 5,
+    "passed": 5,
+    "failed": 0,
+    "details": [...]
+  },
+  "files_summary": {
+    "created": ["..."],
+    "modified": ["..."],
+    "total_changes": "+523 -45 lines"
+  },
+  "blockers_encountered": [],
+  "deviations_from_plan": [],
+  "ready_for_next_phase": true,
+  "recommendations": ["..."]
+}
+```
+
+**Human-readable report:**
+
+```markdown
+# Phase {phase_number} Implementation Report
+
+**Status:** Complete
+**Duration:** <actual time>
+**Checkpoints:** {N} of {N} completed
+
+---
+
+## Implementation Summary
+
+**Backend:**
+- <Key feature 1>
+- <Key feature 2>
+
+**iOS:**
+- <Key feature 1>
+- <Key feature 2>
+
+**Integration:**
+- <How they connect>
+
+---
+
+## Checkpoints
+
+### Checkpoint 1: <Name>
+- Status: ✅ Complete
+- Validation: Passed
+- Files: 5 created, 2 modified
+- Commit: abc123
+
+<Repeat for all checkpoints>
+
+---
+
+## Acceptance Criteria
+
+- [x] Criterion 1 - Passed
+- [x] Criterion 2 - Passed
+- [x] Criterion 3 - Passed
+- [x] Criterion 4 - Passed
+- [x] Criterion 5 - Passed
+
+**Result: 5/5 passed**
+
+---
+
+## Files Changed
+
+```bash
+git diff --stat main..phase-{phase_number}-implementation
+```
+
+<Output>
+
+---
+
+## Blockers Encountered
+
+<List any blockers + resolutions>
+<Or "None">
+
+---
+
+## Deviations from Plan
+
+<List any changes + rationale>
+<Or "None - followed plan exactly">
+
+---
+
+## Known Issues
+
+<List technical debt or issues>
+<Or "None">
+
+---
+
+## Ready for Merge
+
+**Status:** Yes
+
+**Next Steps:**
+1. User reviews report
+2. User merges: `git checkout main && git merge phase-{phase_number}-implementation`
+3. Ready for Phase {phase_number + 1}
+
+---
+
+**Report Generated:** <timestamp>
+**Total Implementation Time:** <duration>
+```
+
+Save to: `.phase-logs/phase-{phase_number}/REPORT.md`
+
+---
+
+## Report to User
+
+Provide concise summary:
 
 ```
-Implementation Summary:
-- Backend: FastAPI hello-world, health check endpoint, Supabase connection
-- iOS: Empty SwiftUI app, Config.plist setup, Logger configured
-- Integration: iOS can fetch from backend /health endpoint
+Phase {phase_number} Implementation: Complete
 
-Files Changed:
- backend/app/main.py           | 45 ++++++++++++++++++++
- backend/app/config.py         | 23 ++++++++++
- backend/app/db/supabase_client.py | 18 ++++++++
- SydneyTransit/SydneyTransitApp.swift | 12 +++++++
- SydneyTransit/Core/Utilities/Logger.swift | 8 ++++
- SydneyTransit/Config.plist    | 15 +++++++
- 6 files changed, 121 insertions(+)
+Checkpoints: {N}/{N} completed
+Acceptance Criteria: {X}/{Y} passed
 
-Testing Results:
-Acceptance Criteria:
-- [x] Server starts without errors: Pass
-- [x] /health returns 200: Pass - {"status":"healthy"}
-- [x] iOS app launches: Pass - No crashes
-- [x] Supabase connected: Pass - Can query DB
-- [x] Redis connected: Pass - PING → PONG
+Backend:
+- <Key deliverable 1>
+- <Key deliverable 2>
 
-Tests Run:
-- Backend health check: Pass - curl http://localhost:8000/health
-- iOS build: Pass - Xcode Cmd+B succeeded
-- Manual tests: Pass - All checklist items verified
+iOS:
+- <Key deliverable 1>
+- <Key deliverable 2>
 
-Edge Cases:
-- Missing .env file: Pass - Clear error message shown
-- Invalid Supabase URL: Pass - Connection error logged correctly
+Integration:
+- <How they connect>
 
-Blockers Encountered: None
+Files: <N> created, <M> modified (+<lines> -<lines>)
 
-Deviations from Plan: None
+Blockers: <None or list>
+Deviations: <None or list>
 
-Known Issues: None
+Full Report: .phase-logs/phase-{phase_number}/REPORT.md
 
-Screenshots: Home screen shows "Sydney Transit" title (blank otherwise, as expected)
+Ready for Merge: Yes/No
+<If No, explain what needs fixing>
 
-Ready for Merge: Yes
-Ready for Next Phase: Yes (Phase 1)
-
-Recommendations:
-- Phase 1 will be complex (GTFS parsing) - allocate 2-3 weeks
-- Consider breaking Phase 1 into sub-phases if needed
+Next: Review report, then merge to main
 ```
+
+---
+
+## Notes
+
+**Orchestrator Benefits:**
+- Maintains phase coherence (never lost in details)
+- Clean context per checkpoint (no context rot)
+- Independent validation (catches subagent hallucinations)
+- Clean git history (atomic commits per checkpoint)
+
+**Subagent Benefits:**
+- Fresh context (15K+ tokens for implementation)
+- Focused task (one checkpoint, clear goal)
+- Self-contained (design + references provided)
+- Fail-safe (orchestrator validates independently)
+
+**Token Management:**
+- Orchestrator: ~5K constant (never grows)
+- Subagent: ~15K per checkpoint (then discarded)
+- Total: More tokens used, but higher quality + reliability
+
+**Cost vs Quality:**
+- Multiple Sonnet invocations = higher cost
+- But: Fewer bugs, no context pollution, reliable output
+- Trade-off: Optimizing for reliability over cost
