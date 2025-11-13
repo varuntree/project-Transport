@@ -289,11 +289,50 @@ Task tool:
    - If files missing → Subagent hallucinated
 
 **If validation fails:**
-- **Option 1:** Retry subagent (same design, add error context)
+- **Option 1:** Invoke bugfix subagent (automatic, see 4.3.1)
 - **Option 2:** Redesign checkpoint (orchestrator adjusts design)
 - **Option 3:** Escalate to user (true blocker)
 
 **Retry once, then escalate.**
+
+### 4.3.1 Invoke Bugfix Subagent
+
+**Orchestrator automatic bugfix workflow:**
+
+1. **Capture bug context:**
+   ```bash
+   # Save validation failure
+   echo '{
+     "checkpoint": {checkpoint_number},
+     "validation_command": "<command>",
+     "validation_output": "<output>",
+     "expected_output": "<from design>",
+     "timestamp": "<ISO 8601>"
+   }' > .phase-logs/phase-{phase_number}/checkpoint-{N}-validation-failure.json
+   ```
+
+2. **Invoke /fix-bug:**
+   ```
+   SlashCommand: /fix-bug {phase_number} {checkpoint_number} validation_failed
+   ```
+
+3. **Process bugfix result:**
+
+   **If status: "fixed":**
+   - Re-run orchestrator validation (Stage 4.3 checks)
+   - If passes → Commit (Stage 4.4)
+   - If still fails → Escalate to user
+
+   **If status: "blocked":**
+   - Report to user: diagnosis + blocker + required action
+   - Pause implementation, wait for user decision
+
+   **If status: "needs_redesign":**
+   - Orchestrator redesigns checkpoint (create design-v2.md)
+   - Re-invoke implementation subagent with v2 design
+   - Validate again
+
+4. **Max 1 automatic attempt. If fails → escalate to user.**
 
 ### 4.4 Commit Checkpoint (Atomic)
 

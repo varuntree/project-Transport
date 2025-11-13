@@ -130,7 +130,6 @@ playground.xcworkspace
 Packages/
 Package.pins
 Package.resolved
-*.xcodeproj
 
 # CocoaPods (if used)
 Pods/
@@ -150,7 +149,7 @@ iOSInjectionProject/
 
 # iOS Config (contains sensitive keys)
 Config.plist
-Config-*.plist
+!Config-Example.plist
 
 # ============================================
 # IDE / Editors
