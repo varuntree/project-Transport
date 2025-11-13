@@ -33,6 +33,25 @@ struct HomeView: View {
                     }
                 }
 
+                Divider()
+                    .padding(.vertical)
+
+                // Phase 1: Search functionality
+                NavigationLink {
+                    SearchView()
+                } label: {
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                        Text("Search Stops")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(.secondary)
+                    }
+                    .padding()
+                    .background(Color(.systemGray6))
+                    .cornerRadius(10)
+                }
+
                 Spacer()
             }
             .padding()
