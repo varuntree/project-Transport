@@ -52,6 +52,22 @@ struct HomeView: View {
                     .cornerRadius(10)
                 }
 
+                // Phase 1: Route list
+                NavigationLink {
+                    RouteListView()
+                } label: {
+                    HStack {
+                        Image(systemName: "tram.fill")
+                        Text("All Routes")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(.secondary)
+                    }
+                    .padding()
+                    .background(Color(.systemGray6))
+                    .cornerRadius(10)
+                }
+
                 Spacer()
             }
             .padding()

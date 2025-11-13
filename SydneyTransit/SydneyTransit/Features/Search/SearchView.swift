@@ -31,7 +31,7 @@ struct SearchView: View {
             } else {
                 ForEach(searchResults) { stop in
                     NavigationLink {
-                        StopDetailsPlaceholder(stop: stop)
+                        StopDetailsView(stop: stop)
                     } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(stop.stopName)
@@ -117,37 +117,6 @@ struct SearchView: View {
             searchResults = []
             isLoading = false
         }
-    }
-}
-
-// Placeholder view for StopDetailsView (will be created in Checkpoint 10)
-struct StopDetailsPlaceholder: View {
-    let stop: Stop
-
-    var body: some View {
-        VStack(spacing: 20) {
-            Text(stop.stopName)
-                .font(.title)
-                .fontWeight(.bold)
-
-            if let stopCode = stop.stopCode {
-                Text("Stop Code: \(stopCode)")
-                    .font(.headline)
-            }
-
-            Text("Latitude: \(stop.stopLat)")
-                .font(.caption)
-            Text("Longitude: \(stop.stopLon)")
-                .font(.caption)
-
-            Spacer()
-
-            Text("Stop details view coming in Checkpoint 10")
-                .foregroundColor(.secondary)
-                .font(.caption)
-        }
-        .padding()
-        .navigationTitle("Stop Details")
     }
 }
 
