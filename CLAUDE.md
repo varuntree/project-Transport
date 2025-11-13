@@ -239,3 +239,4 @@ class DeparturesViewModel: ObservableObject {
 - Architecture: 100% complete (5 specs, 8 Oracle consultations integrated)
 - Implementation: 0% (waiting for Phase 0 start)
 - Next action: User completes Phase 0 setup → AI implements PHASE_0_FOUNDATION.md
+- hey, i want you to add, that if you every need to do anything with the the database and storage, which we use the supabse for that, i want houto use the supabase mcp with the prject name sydney-transit-dev

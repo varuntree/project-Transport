@@ -6,9 +6,19 @@
           "-y",
           "@supabase/mcp-server-supabase@latest",
           "--access-token",
-          ""
+          "sbp_2cb881e3b8ca2210314af039b352ae596d9c0009"
         ]
-      }
+      },
+      "playwright": {
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest",
+        "--isolated",
+        "--headless",
+        "--viewport-size",
+        "1920,1080"
+      ]
+    }
     }
   }
 
