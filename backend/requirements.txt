@@ -9,5 +9,6 @@ pydantic-settings==2.7.0
 python-dotenv==1.0.0
 requests==2.31.0
 gtfs-kit==6.0.0
+gtfs-realtime-bindings==1.0.0
 pandas>=2.2.0
 numpy>=1.26.0
