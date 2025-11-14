@@ -1,0 +1,1 @@
+{"status":"complete","checkpoint":7,"files_created":["SydneyTransit/SydneyTransit/Features/Departures/DeparturesViewModel.swift"],"validation":{"passed":true},"next_checkpoint_context":"iOS ViewModel implemented: Timer auto-refresh (30s), loading/error states, memory-safe","timestamp":"2025-11-14T20:20:00Z"}
