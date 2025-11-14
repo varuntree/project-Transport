@@ -74,8 +74,8 @@ app.conf.update(
     beat_cron_starting_deadline=120,  # Don't catch up old slots after restart
     beat_max_loop_interval=30,  # Poll for sub-minute schedules
 
-    # Task discovery (initially empty, will add in next checkpoints)
-    include=[],
+    # Task discovery
+    include=["app.tasks.gtfs_rt_poller"],
 )
 
 # Beat schedule (DST-safe cron times)
