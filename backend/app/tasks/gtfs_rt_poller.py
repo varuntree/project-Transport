@@ -227,7 +227,7 @@ def cache_blob(redis_client: redis.Redis, key: str, data: list, ttl: int) -> boo
 
 
 @celery_app.task(
-    name="poll_gtfs_rt",
+    name="app.tasks.gtfs_rt_poller.poll_gtfs_rt",
     queue="critical",
     bind=True,
     max_retries=0,  # No retries - next schedule tick handles it

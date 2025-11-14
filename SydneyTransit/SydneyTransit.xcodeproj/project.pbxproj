@@ -8,6 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		AA0000000000000000000001 /* SydneyTransitApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000001 /* SydneyTransitApp.swift */; };
+		AA9681CF92837B4080BBDDBC5C /* Departure.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBCC5D28B94F9A439E88B893B4 /* Departure.swift */; };
+		AA7F0987B75C6D400FB700E787 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB8136FFA1D3144240813D3791 /* APIClient.swift */; };
+		AA5E5CE0F7F4B34FB996AA004E /* DeparturesRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB678CA7FD585847ED8EF997FE /* DeparturesRepository.swift */; };
 		AA0000000000000000000002 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000002 /* Assets.xcassets */; };
 		AA0000000000000000000003 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000003 /* Constants.swift */; };
 		AA0000000000000000000004 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000004 /* Logger.swift */; };
@@ -28,6 +31,9 @@
 
 /* Begin PBXFileReference section */
 		BB0000000000000000000001 /* SydneyTransitApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SydneyTransitApp.swift; sourceTree = "<group>"; };
+		BBCC5D28B94F9A439E88B893B4 /* Departure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Departure.swift; sourceTree = "<group>"; };
+		BB8136FFA1D3144240813D3791 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		BB678CA7FD585847ED8EF997FE /* DeparturesRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeparturesRepository.swift; sourceTree = "<group>"; };
 		BB0000000000000000000002 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		BB0000000000000000000003 /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
 		BB0000000000000000000004 /* Logger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logger.swift; sourceTree = "<group>"; };
