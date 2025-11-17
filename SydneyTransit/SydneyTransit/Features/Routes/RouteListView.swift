@@ -83,7 +83,7 @@ struct RouteListView: View {
 
     // Returns route types to show in segmented control (only types with actual routes)
     private func visibleRouteTypes() -> [RouteType] {
-        let priority: [RouteType] = [.rail, .metro, .bus, .ferry, .tram]
+        let priority: [RouteType] = [.rail, .nswMetro, .regularBus, .schoolBus, .regionalBus, .ferry, .lightRail]
         return priority.filter { routesByType[$0]?.isEmpty == false }
     }
 

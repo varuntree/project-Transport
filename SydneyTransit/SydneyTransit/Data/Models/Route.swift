@@ -55,6 +55,11 @@ enum RouteType: Int, CaseIterable, Identifiable {
     case cableTram = 5
     case aerialLift = 6
     case funicular = 7
+    case nswMetro = 401
+    case regularBus = 700
+    case schoolBus = 712
+    case regionalBus = 714
+    case lightRail = 900
     case unknown = -1
 
     var id: Int { rawValue }
@@ -69,6 +74,11 @@ enum RouteType: Int, CaseIterable, Identifiable {
         case .cableTram: return "Cable Tram"
         case .aerialLift: return "Aerial Lift"
         case .funicular: return "Funicular"
+        case .nswMetro: return "Metro"
+        case .regularBus: return "Bus"
+        case .schoolBus: return "School Bus"
+        case .regionalBus: return "Regional Bus"
+        case .lightRail: return "Light Rail"
         case .unknown: return "Unknown"
         }
     }
@@ -80,6 +90,11 @@ enum RouteType: Int, CaseIterable, Identifiable {
         case .bus: return .blue
         case .ferry: return .green
         case .tram: return .orange
+        case .nswMetro: return .purple
+        case .regularBus: return .blue
+        case .schoolBus: return .orange
+        case .regionalBus: return .green
+        case .lightRail: return .red
         default: return .gray
         }
     }
