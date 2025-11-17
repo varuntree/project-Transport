@@ -88,6 +88,7 @@ def get_realtime_departures(
     stop_id: str,
     time_secs_local: Optional[int] = None,
     service_date: Optional[str] = None,
+    direction: str = "future",
     limit: int = 10,
 ) -> List[Dict]:
     """Get real-time departures for a stop (merges static schedules + GTFS-RT delays).
@@ -96,6 +97,7 @@ def get_realtime_departures(
         stop_id: GTFS stop_id
         time_secs_local: Seconds since local (Sydney) midnight for filtering; required.
         service_date: Service date in YYYY-MM-DD (Sydney time); required.
+        direction: 'past' for earlier departures, 'future' for later (default 'future')
         limit: Max departures to return (default 10)
 
     Returns:
@@ -130,7 +132,15 @@ def get_realtime_departures(
 
         # Step 1: Fetch static schedules (phase 1 query)
         # Calculate actual departure time: trip_start_time + offset_secs
-        # Filter WHERE actual_departure_time >= current_time
+        # Bidirectional: >= time for future, <= time for past
+        time_filter = f">= {time_secs_local}" if direction == "future" else f"<= {time_secs_local}"
+        sort_order = "ASC" if direction == "future" else "DESC"
+
+        # Expand SQL LIMIT to capture delayed trains outside user window
+        # RT delays can push scheduled departures into realtime window (e.g., 07:15 scheduled → 07:42 delayed)
+        # Fetch 3x user limit to ensure delayed trains included, then sort/trim after RT merge
+        expanded_limit = max(limit * 3, 30)
+
         query = f"""
         SELECT
             t.trip_id,
@@ -154,9 +164,9 @@ def get_realtime_departures(
         WHERE ps.stop_id = '{stop_id}'
           AND c.start_date <= '{service_date}'
           AND c.end_date >= '{service_date}'
-          AND (t.start_time_secs + ps.departure_offset_secs) >= {time_secs_local}
-        ORDER BY (t.start_time_secs + ps.departure_offset_secs) ASC
-        LIMIT 20
+          AND (t.start_time_secs + ps.departure_offset_secs) {time_filter}
+        ORDER BY (t.start_time_secs + ps.departure_offset_secs) {sort_order}
+        LIMIT {expanded_limit}
         """
 
         result = supabase.rpc("exec_raw_sql", {"query": query}).execute()
@@ -270,10 +280,12 @@ def get_realtime_departures(
                 'occupancy_status': occupancy_status,
             })
 
-        # Sort by realtime departure time (earliest first)
-        departures.sort(key=lambda x: x['realtime_time_secs'])
+        # Sort by realtime departure time
+        # For future: earliest first (ascending), for past: latest first (descending)
+        departures.sort(key=lambda x: x['realtime_time_secs'], reverse=(direction == "past"))
 
-        # Limit results
+        # Trim to user-requested limit (after RT merge and sort)
+        # SQL fetched expanded_limit to capture delayed trains, now filter to final result set
         departures = departures[:limit]
 
         # Count realtime vs static

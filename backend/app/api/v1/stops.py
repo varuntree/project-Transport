@@ -177,12 +177,14 @@ async def get_stop(
 async def get_departures(
     stop_id: str,
     time_param: Optional[int] = Query(None, alias="time", description="Seconds since midnight Sydney time (default: now)"),
+    direction: str = Query("future", regex="^(past|future)$", description="Direction: 'past' for earlier departures, 'future' for later (default: future)"),
     limit: int = Query(10, ge=1, le=50, description="Max results"),
     supabase: Client = Depends(get_supabase)
 ):
     """Get real-time departures from stop (merges static schedules + GTFS-RT delays).
 
     Phase 2: Returns real-time predictions with delay_s and realtime flag.
+    Bidirectional scroll: direction='past' for earlier departures, 'future' for later.
     Graceful degradation to static schedules if Redis cache unavailable.
     """
     start_time_ms = time.time()
@@ -249,6 +251,7 @@ async def get_departures(
             stop_id=stop_id,
             time_secs_local=time_secs,
             service_date=service_date,
+            direction=direction,
             limit=limit
         )
 
@@ -265,16 +268,32 @@ async def get_departures(
                    static_count=static_count,
                    duration_ms=duration_ms)
 
+        # Pagination metadata for infinite scroll
+        # CRITICAL: Use realtime_time_secs (not scheduled) for boundaries to match sort dimension
+        # Pagination must align with displayed order (realtime times, not scheduled times)
+        pagination_meta = None
+        if departures:
+            earliest_time = min(d['realtime_time_secs'] for d in departures)
+            latest_time = max(d['realtime_time_secs'] for d in departures)
+            pagination_meta = {
+                "has_more_past": earliest_time > 3900,  # Earliest train ~1:05 AM
+                "has_more_future": latest_time < 105723,  # Latest train ~29:22 (next day)
+                "earliest_time_secs": earliest_time,
+                "latest_time_secs": latest_time,
+                "direction": direction
+            }
+
         return {
             "data": {
                 "departures": departures,
                 "count": len(departures)
             },
             "meta": {
-                "pagination": None,  # Not paginated
+                "pagination": pagination_meta,
                 "query": {
                     "stop_id": stop_id,
-                    "time_secs": time_secs
+                    "time_secs": time_secs,
+                    "direction": direction
                 }
             }
         }
