@@ -1,0 +1,19 @@
+{
+  "status": "complete",
+  "checkpoint": 1,
+  "files_created": [],
+  "files_modified": ["backend/app/services/realtime_service.py"],
+  "validation": {
+    "passed": true,
+    "command": "python -m py_compile backend/app/services/realtime_service.py",
+    "output": "Compilation successful (no errors)",
+    "issues": []
+  },
+  "blockers": [],
+  "next_checkpoint_context": "Added time filter: departure_offset_secs >= {time_secs} where time_secs is calculated as seconds since midnight from now_secs Unix timestamp. Reduced LIMIT from 100 to 20 to prevent oversized responses. Query now returns only future departures for the current service day.",
+  "confidence_checks": {
+    "ios_research_consulted": false,
+    "standards_followed": ["SQL patterns (f-string usage matching existing code pattern)", "Python datetime conversion (utcfromtimestamp)", "Seconds-since-midnight calculation formula"],
+    "uncertainties_researched": []
+  }
+}
