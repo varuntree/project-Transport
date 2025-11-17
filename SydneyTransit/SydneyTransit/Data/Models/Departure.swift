@@ -13,7 +13,8 @@ struct Departure: Codable, Identifiable, Hashable {
     let wheelchairAccessible: Int
     let occupancy_status: Int?
 
-    var id: String { tripId }
+    // Unique ID: trip can visit same stop multiple times, so use trip_id + scheduled_time
+    var id: String { "\(tripId)_\(scheduledTimeSecs)" }
 
     // Computed: minutes until departure (from now)
     var minutesUntil: Int {
