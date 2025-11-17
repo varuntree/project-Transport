@@ -188,6 +188,8 @@ def parse_trip_updates(pb_data: bytes) -> list[dict]:
                     "arrival_delay": stu.arrival.delay if stu.HasField("arrival") and stu.arrival.HasField("delay") else None,
                     "departure_delay": stu.departure.delay if stu.HasField("departure") and stu.departure.HasField("delay") else None,
                 }
+                # Platform code may be available in GTFS-RT extensions (NSW-specific)
+                # Currently not parsed - fallback to static GTFS or display None
                 stop_time_updates.append(stop_update)
 
             trip_data = {

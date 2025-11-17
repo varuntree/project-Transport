@@ -44,6 +44,8 @@ class DepartureResponse(BaseModel):
     departure_offset_secs: int
     stop_sequence: int
     departure_epoch: int
+    platform: Optional[str] = None
+    wheelchair_accessible: int = 0
 
 class StopSearchResponse(StopBase):
     """Search result with relevance score"""

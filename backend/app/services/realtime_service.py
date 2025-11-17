@@ -137,6 +137,7 @@ def get_realtime_departures(
             t.trip_id,
             t.trip_headsign,
             t.direction_id,
+            t.wheelchair_accessible,
             r.route_id,
             r.route_short_name,
             r.route_long_name,
@@ -166,8 +167,9 @@ def get_realtime_departures(
         # Step 2: Determine modes needed (heuristic from route_ids)
         modes_needed: Set[str] = {determine_mode(dep['route_id']) for dep in static_deps}
 
-        # Step 3: Fetch Redis RT delays (gzip blobs per mode)
+        # Step 3: Fetch Redis RT delays + platform codes (gzip blobs per mode)
         trip_delays: Dict[str, int] = {}  # {trip_id: delay_s}
+        trip_platforms: Dict[str, str] = {}  # {trip_id: platform_code}
 
         for mode in modes_needed:
             try:
@@ -179,12 +181,20 @@ def get_realtime_departures(
                     decompressed = gzip.decompress(blob)
                     data = json.loads(decompressed)
 
-                    # Extract trip delays
+                    # Extract trip delays + platform codes from stop_time_updates
                     for tu in data:
                         trip_id = tu.get('trip_id')
                         delay_s = tu.get('delay_s', 0)
                         if trip_id:
                             trip_delays[trip_id] = delay_s
+
+                            # Extract platform from first stop_time_update with platform_code
+                            # (platform_code may be in stop_time_update, not guaranteed)
+                            stop_time_updates = tu.get('stop_time_updates', [])
+                            for stu in stop_time_updates:
+                                if stu.get('stop_id') == stop_id and stu.get('platform_code'):
+                                    trip_platforms[trip_id] = stu['platform_code']
+                                    break
 
                     logger.debug("realtime_data_fetched", mode=mode, trip_count=len(data))
                 else:
@@ -211,6 +221,12 @@ def get_realtime_departures(
             delay_s = trip_delays.get(trip_id, 0)
             realtime_time_secs = scheduled_time_secs + delay_s
 
+            # Get platform from RT data (may be None)
+            platform = trip_platforms.get(trip_id)
+
+            # Get wheelchair_accessible from static GTFS (0=unknown, 1=accessible, 2=not accessible)
+            wheelchair_accessible = dep.get('wheelchair_accessible', 0)
+
             departures.append({
                 'trip_id': trip_id,
                 'route_short_name': dep['route_short_name'],
@@ -223,6 +239,8 @@ def get_realtime_departures(
                 'delay_s': delay_s,
                 'realtime': delay_s != 0,
                 'stop_sequence': dep['stop_sequence'],
+                'platform': platform,
+                'wheelchair_accessible': wheelchair_accessible,
             })
 
         # Sort by realtime departure time (earliest first)
