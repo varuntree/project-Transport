@@ -77,9 +77,9 @@ pip install -r requirements.txt
 cp .env.example .env  # Fill in Supabase, Redis, NSW API keys
 
 # Run
-uvicorn app.main:app --reload  # http://localhost:8000
-celery -A app.tasks.celery_app worker -Q critical,normal,batch --loglevel=info
-celery -A app.tasks.celery_app beat --loglevel=info
+cd /Users/varunprasad/code/prjs/prj_transport/backend && source venv/bin/activate && uvicorn app.main:app --reload  # http://localhost:8000
+cd /Users/varunprasad/code/prjs/prj_transport/backend && source venv/bin/activate && celery -A app.tasks.celery_app worker -Q critical,normal,batch --loglevel=info
+cd /Users/varunprasad/code/prjs/prj_transport/backend && source venv/bin/activate && celery -A app.tasks.celery_app beat --loglevel=info
 
 # Test
 curl http://localhost:8000/health

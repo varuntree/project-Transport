@@ -114,9 +114,9 @@ celery -A app.tasks.celery_app inspect scheduled
 **Validation:**
 ```bash
 # Start worker + beat in separate terminals:
-# Terminal 1: uvicorn app.main:app --reload
-# Terminal 2: celery -A app.tasks.celery_app worker -Q critical -c 1 --loglevel=info
-# Terminal 3: celery -A app.tasks.celery_app beat --loglevel=info
+# Terminal 1: cd /Users/varunprasad/code/prjs/prj_transport/backend && source venv/bin/activate && uvicorn app.main:app --reload
+# Terminal 2: cd /Users/varunprasad/code/prjs/prj_transport/backend && source venv/bin/activate && celery -A app.tasks.celery_app worker -Q critical -c 1 --loglevel=info
+# Terminal 3: cd /Users/varunprasad/code/prjs/prj_transport/backend && source venv/bin/activate && celery -A app.tasks.celery_app beat --loglevel=info
 
 # Wait 30s, then check Redis:
 redis-cli KEYS vp:*
@@ -381,9 +381,9 @@ open SydneyTransit.xcodeproj
 **Validation:**
 ```bash
 # Start all services:
-# Terminal 1: uvicorn app.main:app --reload
-# Terminal 2: bash scripts/start_worker_critical.sh
-# Terminal 3: bash scripts/start_beat.sh
+# Terminal 1: cd /Users/varunprasad/code/prjs/prj_transport/backend && source venv/bin/activate && uvicorn app.main:app --reload
+# Terminal 2: cd /Users/varunprasad/code/prjs/prj_transport/backend && source venv/bin/activate && bash scripts/start_worker_critical.sh
+# Terminal 3: cd /Users/varunprasad/code/prjs/prj_transport/backend && source venv/bin/activate && bash scripts/start_beat.sh
 
 # iOS simulator:
 # 1. Launch app

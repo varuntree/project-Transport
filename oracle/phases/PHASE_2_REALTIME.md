@@ -344,10 +344,10 @@ source venv/bin/activate
 uvicorn app.main:app --reload
 
 # Terminal 3: Start Worker (critical)
-bash scripts/start_worker_critical.sh
+cd /Users/varunprasad/code/prjs/prj_transport/backend && source venv/bin/activate && bash scripts/start_worker_critical.sh
 
 # Terminal 4: Start Beat
-bash scripts/start_beat.sh
+cd /Users/varunprasad/code/prjs/prj_transport/backend && source venv/bin/activate && bash scripts/start_beat.sh
 
 # Watch logs: Should see "poll_gtfs_rt_started" every 30s
 ```
