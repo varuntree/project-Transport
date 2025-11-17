@@ -1,0 +1,98 @@
+{
+  "bug_summary": "DeparturesView shows 'No upcoming departures' when static GTFS schedules should display - backend query returns empty, iOS offline fallback not triggering correctly",
+  "affected_phases": [
+    {
+      "phase": 2,
+      "confidence": 0.95,
+      "reason": "Real-time departures implementation (Checkpoints 4-8) - realtime_service.py query logic + iOS DeparturesView/ViewModel/Repository"
+    },
+    {
+      "phase": 1,
+      "confidence": 0.70,
+      "reason": "Static GTFS data pipeline - pattern_stops table schema + calendar service_id filtering may affect departure queries"
+    },
+    {
+      "phase": 2.1,
+      "confidence": 0.50,
+      "reason": "Phase 2.1 modified realtime_service.py and DeparturesView - recent changes may have introduced regression"
+    }
+  ],
+  "affected_systems": [
+    {
+      "system": "Backend Realtime Service (static schedule query)",
+      "layer": "Backend Service",
+      "files": [
+        "/Users/varunprasad/code/prjs/prj_transport/backend/app/services/realtime_service.py"
+      ],
+      "details": "Lines 143-174: SQL query joins pattern_stops + patterns + trips + routes + calendar with filters (stop_id, calendar dates, departure_offset_secs >= time_secs). Returns empty static_deps array."
+    },
+    {
+      "system": "Backend Stops API (departures endpoint)",
+      "layer": "Backend API",
+      "files": [
+        "/Users/varunprasad/code/prjs/prj_transport/backend/app/api/v1/stops.py"
+      ],
+      "details": "Lines 176-293: GET /stops/{stop_id}/departures calls get_realtime_departures with Unix epoch time (int(time.time())) instead of seconds-since-midnight time_secs"
+    },
+    {
+      "system": "iOS Departures Repository (offline fallback)",
+      "layer": "iOS Data",
+      "files": [
+        "/Users/varunprasad/code/prjs/prj_transport/SydneyTransit/SydneyTransit/Data/Repositories/DeparturesRepository.swift"
+      ],
+      "details": "Lines 32-37: API returns empty departures but falls back to DatabaseManager.getDepartures - fallback may not be executing or GRDB query also failing"
+    },
+    {
+      "system": "iOS Database Manager (static GRDB query)",
+      "layer": "iOS Data",
+      "files": [
+        "/Users/varunprasad/code/prjs/prj_transport/SydneyTransit/SydneyTransit/Core/Database/DatabaseManager.swift"
+      ],
+      "details": "Lines 69-116: getDepartures queries pattern_stops with stop_id from dict_stop table + time range filtering. May have JOIN issues or missing data."
+    },
+    {
+      "system": "iOS Departures ViewModel",
+      "layer": "iOS UI",
+      "files": [
+        "/Users/varunprasad/code/prjs/prj_transport/SydneyTransit/SydneyTransit/Features/Departures/DeparturesViewModel.swift"
+      ],
+      "details": "Lines 16-41: loadDepartures calls repository.fetchDepartures - handles errors but may not distinguish between empty result vs error"
+    },
+    {
+      "system": "iOS Departures View",
+      "layer": "iOS UI",
+      "files": [
+        "/Users/varunprasad/code/prjs/prj_transport/SydneyTransit/SydneyTransit/Features/Departures/DeparturesView.swift"
+      ],
+      "details": "Lines 18-21: Shows 'No upcoming departures' when viewModel.departures.isEmpty + no error. Stop.getStopID() lookup may be failing (lines 40-54)."
+    },
+    {
+      "system": "GTFS Static Data (Supabase calendar table)",
+      "layer": "Data",
+      "files": [],
+      "details": "Calendar service_id filtering may exclude all trips if start_date/end_date ranges don't cover current date or service exceptions not handled"
+    }
+  ],
+  "keywords": [
+    "departures",
+    "get_realtime_departures",
+    "pattern_stops",
+    "calendar",
+    "stop_id",
+    "departure_offset_secs",
+    "getDepartures",
+    "DatabaseManager",
+    "DeparturesRepository",
+    "static_deps",
+    "No upcoming departures"
+  ],
+  "primary_phase": 2,
+  "search_summary": "Found 2 backend files (realtime_service.py, stops.py) + 4 iOS files (DeparturesView/ViewModel/Repository/DatabaseManager). Backend query at realtime_service.py:143-174 returns empty static_deps. iOS fallback at DeparturesRepository.swift:48 + DatabaseManager.swift:69-116 may also be failing. Critical time handling mismatch: stops.py:246 passes Unix epoch time (int(time.time())) but realtime_service expects seconds-since-midnight. Calendar date filtering (lines 160-163) may exclude valid trips.",
+  "suspected_root_causes": [
+    "Backend: stops.py:246 passes Unix epoch time (e.g. 1763373751) instead of seconds-since-midnight (e.g. 32400) to get_realtime_departures",
+    "Backend: Calendar table service_id filtering may be too restrictive (start_date/end_date not covering current date)",
+    "Backend: realtime_service.py uses now_date from Unix epoch (UTC) instead of Sydney timezone",
+    "iOS: DatabaseManager.getDepartures may fail silently if dict_stop table missing stop_id mappings",
+    "iOS: DeparturesRepository.swift may not be reaching offline fallback if API returns empty but no error thrown"
+  ]
+}

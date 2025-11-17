@@ -86,43 +86,22 @@ def determine_mode(route_id: str) -> str:
 
 def get_realtime_departures(
     stop_id: str,
-    now_secs: int,
-    limit: int = 10
+    time_secs_local: Optional[int] = None,
+    service_date: Optional[str] = None,
+    limit: int = 10,
 ) -> List[Dict]:
-    """Get real-time departures for a stop (merges static schedules + Redis RT delays).
+    """Get real-time departures for a stop (merges static schedules + GTFS-RT delays).
 
     Args:
         stop_id: GTFS stop_id
-        now_secs: Current time in Unix epoch seconds
+        time_secs_local: Seconds since local (Sydney) midnight for filtering; required.
+        service_date: Service date in YYYY-MM-DD (Sydney time); required.
         limit: Max departures to return (default 10)
 
     Returns:
         List of departure dicts with fields:
-        - trip_id: str
-        - route_short_name: str
-        - route_long_name: str
-        - route_type: int
-        - route_color: str | None
-        - headsign: str
-        - scheduled_time_secs: int (pattern start_time + departure_offset_secs)
-        - realtime_time_secs: int (scheduled + delay_s)
-        - delay_s: int (0 if no RT data)
-        - realtime: bool (true if delay_s != 0)
-        - stop_sequence: int
-
-    Example:
-        >>> deps = get_realtime_departures('200060', 32400, 10)
-        >>> deps[0]
-        {
-            'trip_id': 'T1.1234',
-            'route_short_name': 'T1',
-            'headsign': 'Hornsby',
-            'scheduled_time_secs': 32500,
-            'realtime_time_secs': 32620,
-            'delay_s': 120,
-            'realtime': True,
-            'stop_sequence': 5
-        }
+        - trip_id, route_short_name/long_name/type/color, headsign
+        - scheduled_time_secs, realtime_time_secs, delay_s, realtime, stop_sequence
     """
     start_time = time.time()
 
@@ -130,39 +109,52 @@ def get_realtime_departures(
         supabase = get_supabase()
         redis_binary = get_redis_binary()
 
-        # Step 1: Fetch static schedules (reuse Phase 1 query)
-        # Note: departure_offset_secs is seconds since midnight (00:00:00)
-        # Phase 1 query returns all trips serving this stop today
-        from datetime import datetime
-        now_date = datetime.utcfromtimestamp(now_secs).strftime("%Y-%m-%d")
+        # Backwards compatibility: if caller omits time/date, derive using Sydney timezone
+        if service_date is None or time_secs_local is None:
+            import pytz
+            from datetime import datetime
 
-        # Calculate seconds since midnight for time filtering
-        now_dt = datetime.utcfromtimestamp(now_secs)
-        time_secs = (now_dt.hour * 3600) + (now_dt.minute * 60) + now_dt.second
+            sydney_tz = pytz.timezone('Australia/Sydney')
+            now_dt = datetime.now(sydney_tz)
+            service_date = now_dt.strftime("%Y-%m-%d") if service_date is None else service_date
+            if time_secs_local is None:
+                midnight = now_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+                time_secs_local = int((now_dt - midnight).total_seconds())
 
+        # Guard against missing/invalid time inputs
+        if time_secs_local is None or not (0 <= time_secs_local < 86400):
+            raise ValueError("Invalid time_secs_local; must be 0-86399 seconds since local midnight")
+        if not service_date:
+            raise ValueError("service_date is required")
+
+        # Step 1: Fetch static schedules (phase 1 query)
+        # Calculate actual departure time: trip_start_time + offset_secs
+        # Filter WHERE actual_departure_time >= current_time
         query = f"""
         SELECT
             t.trip_id,
             t.trip_headsign,
             t.direction_id,
             t.wheelchair_accessible,
+            t.start_time_secs,
             r.route_id,
             r.route_short_name,
             r.route_long_name,
             r.route_type,
             r.route_color,
             ps.departure_offset_secs,
-            ps.stop_sequence
+            ps.stop_sequence,
+            (t.start_time_secs + ps.departure_offset_secs) as actual_departure_secs
         FROM pattern_stops ps
         JOIN patterns p ON ps.pattern_id = p.pattern_id
         JOIN trips t ON t.pattern_id = p.pattern_id
         JOIN routes r ON t.route_id = r.route_id
         JOIN calendar c ON t.service_id = c.service_id
         WHERE ps.stop_id = '{stop_id}'
-          AND c.start_date <= '{now_date}'
-          AND c.end_date >= '{now_date}'
-          AND ps.departure_offset_secs >= {time_secs}
-        ORDER BY ps.departure_offset_secs ASC
+          AND c.start_date <= '{service_date}'
+          AND c.end_date >= '{service_date}'
+          AND (t.start_time_secs + ps.departure_offset_secs) >= {time_secs_local}
+        ORDER BY (t.start_time_secs + ps.departure_offset_secs) ASC
         LIMIT 20
         """
 
@@ -170,7 +162,7 @@ def get_realtime_departures(
         static_deps = result.data or []
 
         if not static_deps:
-            logger.info("no_static_departures", stop_id=stop_id, now_secs=now_secs)
+            logger.info("no_static_departures", stop_id=stop_id, service_date=service_date, time_secs=time_secs_local)
             return []
 
         # Step 2: Determine modes needed (heuristic from route_ids)
@@ -222,9 +214,9 @@ def get_realtime_departures(
         for dep in static_deps:
             trip_id = dep['trip_id']
 
-            # departure_offset_secs is already seconds since midnight (00:00:00)
-            # No need to parse start_time - it's the absolute time within the service day
-            scheduled_time_secs = dep['departure_offset_secs']
+            # actual_departure_secs = trip_start_time + departure_offset (calculated in SQL)
+            # This is the absolute departure time in seconds since midnight (can be >= 86400 for next-day trips)
+            scheduled_time_secs = dep['actual_departure_secs']
 
             # Get RT delay (default 0 if no data)
             delay_s = trip_delays.get(trip_id, 0)
@@ -266,7 +258,8 @@ def get_realtime_departures(
         logger.info(
             "realtime_departures_fetched",
             stop_id=stop_id,
-            now_secs=now_secs,
+            service_date=service_date,
+            time_secs=time_secs_local,
             total_count=len(departures),
             realtime_count=realtime_count,
             static_count=static_count,
@@ -281,7 +274,8 @@ def get_realtime_departures(
         logger.error(
             "realtime_departures_failed",
             stop_id=stop_id,
-            now_secs=now_secs,
+            service_date=service_date,
+            time_secs=time_secs_local,
             error=str(exc),
             duration_ms=duration_ms
         )

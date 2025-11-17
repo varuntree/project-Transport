@@ -388,7 +388,7 @@ def _extract_patterns(data: Dict) -> Dict:
     trips["pattern_id"] = trips["trip_id"].map(trip_to_pattern)
 
     # Include all fields needed by Supabase schema
-    output_fields = ["trip_id", "route_id", "pattern_id", "service_id", "trip_headsign"]
+    output_fields = ["trip_id", "route_id", "pattern_id", "service_id", "trip_headsign", "start_time_secs"]
 
     # Add optional fields if they exist
     if "trip_short_name" in trips.columns:
@@ -402,6 +402,8 @@ def _extract_patterns(data: Dict) -> Dict:
 
     trips_output = trips[output_fields].copy()
     trips_output["trip_headsign"] = trips_output["trip_headsign"].fillna("")
+    # Convert start_time_secs to int (was calculated earlier at line 323)
+    trips_output["start_time_secs"] = trips_output["start_time_secs"].fillna(0).astype(int)
     trips_list = trips_output.to_dict("records")
 
     avg_stops_per_pattern = (

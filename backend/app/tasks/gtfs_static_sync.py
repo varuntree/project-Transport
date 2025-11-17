@@ -44,7 +44,7 @@ SCHEMA_FIELDS = {
     "calendar_dates": ["service_id", "date", "exception_type"],
     "patterns": ["pattern_id", "route_id", "direction_id"],  # pattern_name optional, not in parser
     "pattern_stops": ["pattern_id", "stop_sequence", "stop_id", "arrival_offset_secs", "departure_offset_secs"],
-    "trips": ["trip_id", "route_id", "service_id", "pattern_id", "trip_headsign", "trip_short_name", "direction_id", "block_id", "wheelchair_accessible"]
+    "trips": ["trip_id", "route_id", "service_id", "pattern_id", "trip_headsign", "trip_short_name", "direction_id", "block_id", "wheelchair_accessible", "start_time_secs"]
 }
 
 
