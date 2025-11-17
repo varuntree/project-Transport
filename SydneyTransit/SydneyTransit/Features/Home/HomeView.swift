@@ -72,6 +72,9 @@ struct HomeView: View {
             }
             .padding()
             .navigationTitle("Home")
+            .navigationDestination(for: Departure.self) { departure in
+                TripDetailsView(tripId: departure.tripId)
+            }
             .task {
                 await fetchBackendStatus()
             }
