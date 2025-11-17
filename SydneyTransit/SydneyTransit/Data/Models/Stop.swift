@@ -59,4 +59,54 @@ struct Stop: Codable, FetchableRecord, Identifiable {
         """
         return try Stop.fetchOne(db, sql: sql, arguments: [stopID])
     }
+
+    // Primary route type (most frequent route_type serving this stop)
+    // Computed property - queries DB each access (optimize later if needed)
+    nonisolated var primaryRouteType: Int? {
+        do {
+            return try MainActor.assumeIsolated {
+                try DatabaseManager.shared.read { db in
+                    let sql = """
+                        SELECT r.route_type
+                        FROM pattern_stops ps
+                        JOIN patterns p ON ps.pid = p.pid
+                        JOIN routes r ON p.rid = r.rid
+                        WHERE ps.sid = ?
+                        GROUP BY r.route_type
+                        ORDER BY COUNT(*) DESC
+                        LIMIT 1
+                    """
+                    return try Int.fetchOne(db, sql: sql, arguments: [sid])
+                }
+            }
+        } catch {
+            return nil
+        }
+    }
+
+    // Transport mode SF Symbol icon
+    var transportIcon: String {
+        switch primaryRouteType {
+        case 0: return "tram.fill"           // Tram/Light Rail
+        case 1: return "lightrail.fill"      // Metro/Subway
+        case 2: return "train.side.front.car" // Rail
+        case 3: return "bus.fill"            // Bus
+        case 4: return "ferry.fill"          // Ferry
+        case 5: return "cablecar.fill"       // Cable Tram
+        default: return "mappin.circle.fill" // Generic
+        }
+    }
+
+    // Route type display name (for accessibility)
+    var routeTypeDisplayName: String {
+        switch primaryRouteType {
+        case 0: return "Tram"
+        case 1: return "Metro"
+        case 2: return "Train"
+        case 3: return "Bus"
+        case 4: return "Ferry"
+        case 5: return "Cable Tram"
+        default: return "Stop"
+        }
+    }
 }

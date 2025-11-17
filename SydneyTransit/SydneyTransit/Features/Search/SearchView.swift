@@ -33,15 +33,22 @@ struct SearchView: View {
                     NavigationLink {
                         StopDetailsView(stop: stop)
                     } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(stop.stopName)
-                                .font(.body)
-                                .fontWeight(.medium)
+                        HStack(spacing: 12) {
+                            Image(systemName: stop.transportIcon)
+                                .foregroundColor(.blue)
+                                .imageScale(.medium)
+                                .accessibilityLabel("\(stop.routeTypeDisplayName) stop")
 
-                            if let stopCode = stop.stopCode {
-                                Text("Stop \(stopCode)")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(stop.stopName)
+                                    .font(.body)
+                                    .fontWeight(.medium)
+
+                                if let stopCode = stop.stopCode {
+                                    Text("Stop \(stopCode)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
                             }
                         }
                         .padding(.vertical, 4)
