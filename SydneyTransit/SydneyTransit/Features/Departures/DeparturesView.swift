@@ -6,6 +6,7 @@ struct DeparturesView: View {
     @StateObject private var viewModel = DeparturesViewModel()
     @State private var stopId: String?
     @State private var lastTopSentinelTrigger: Date?
+    @State private var hasLoadedInitial = false  // Track if initial load complete
 
     var body: some View {
         ScrollView {
@@ -26,11 +27,13 @@ struct DeparturesView: View {
                         .padding()
                 } else {
                     // Top sentinel for loading past departures
+                    // CRITICAL FIX: Only trigger if initial load complete (prevents immediate trigger)
                     if viewModel.isLoadingPast {
                         ProgressView()
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
-                    } else {
+                    } else if hasLoadedInitial {
+                        // Only show sentinel after initial load (prevents auto-trigger)
                         Color.clear
                             .frame(height: 1)
                             .onAppear {
@@ -93,6 +96,7 @@ struct DeparturesView: View {
                             "stop_name": "\(stop.stopName)"
                         ])
                         await viewModel.loadInitialDepartures(stopId: gtfsStopId)
+                        hasLoadedInitial = true  // Mark initial load complete
                         viewModel.startAutoRefresh(stopId: gtfsStopId)
                     } else {
                         Logger.database.error("No stop_id mapping found", metadata: [

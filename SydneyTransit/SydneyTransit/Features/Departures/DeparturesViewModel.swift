@@ -158,33 +158,36 @@ class DeparturesViewModel: ObservableObject {
     }
 
     private func refreshDeparturesInPlace(stopId: String) async {
-        // Refresh real-time data for EXISTING time window (don't fetch new future departures)
-        // This updates delays/occupancy for already-loaded departures without changing the list
-        guard let earliest = earliestTimeSecs, let latest = latestTimeSecs else {
-            return  // No existing window to refresh
-        }
-
+        // SLIDING WINDOW REFRESH: Fetch fresh departures from NOW forward
+        // This removes departed trains and adds new upcoming departures
+        // Critical fix: Window slides forward as time progresses (not static)
+        
         do {
-            // Fetch departures in the ORIGINAL time window (earliest to latest)
-            // This gets updated real-time data for trips already displayed
+            // Calculate current time (Sydney timezone)
+            let sydney = TimeZone(identifier: "Australia/Sydney")!
+            let now = Date()
+            var calendar = Calendar.current
+            calendar.timeZone = sydney
+            let midnight = calendar.startOfDay(for: now)
+            let nowSecs = Int(now.timeIntervalSince(midnight))
+            
+            // Fetch departures starting from NOW (not old earliest time)
             let page = try await repository.fetchDeparturesPage(
                 stopId: stopId,
-                timeSecs: earliest,  // Use original earliest time, not now()
+                timeSecs: nowSecs,  // NOW - sliding window forward
                 direction: "future",
-                limit: 50  // Larger limit to cover full window
+                limit: 15  // Match initial load size
             )
 
-            // Filter to keep only departures within original window
-            let refreshedDepartures = page.departures.filter { dep in
-                dep.realtimeTimeSecs >= earliest && dep.realtimeTimeSecs <= latest
-            }
+            // Replace entire list with fresh departures
+            departures = page.departures
+            loadedDepartureIds = Set(page.departures.map { $0.id })
 
-            // Update departures list (preserves scroll position)
-            departures = refreshedDepartures
-            loadedDepartureIds = Set(refreshedDepartures.map { $0.id })
-
-            // Keep original boundaries (don't shift window forward)
-            // earliestTimeSecs and latestTimeSecs stay unchanged
+            // UPDATE boundaries to new window (sliding forward)
+            earliestTimeSecs = page.earliestTimeSecs
+            latestTimeSecs = page.latestTimeSecs
+            hasMorePast = page.hasMorePast
+            hasMoreFuture = page.hasMoreFuture
 
         } catch {
             // Silent fail (don't disrupt UX)
