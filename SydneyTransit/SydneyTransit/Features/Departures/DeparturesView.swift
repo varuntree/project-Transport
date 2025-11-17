@@ -5,6 +5,7 @@ struct DeparturesView: View {
     let stop: Stop
     @StateObject private var viewModel = DeparturesViewModel()
     @State private var stopId: String?
+    @State private var lastTopSentinelTrigger: Date?
 
     var body: some View {
         ScrollView {
@@ -33,6 +34,16 @@ struct DeparturesView: View {
                         Color.clear
                             .frame(height: 1)
                             .onAppear {
+                                // Debounce sentinel triggers during scroll bounce
+                                // Prevents race condition where multiple loadPastDepartures() execute in parallel
+                                let now = Date()
+                                if let lastTrigger = lastTopSentinelTrigger,
+                                   now.timeIntervalSince(lastTrigger) < 0.3 {
+                                    // Triggered within 300ms, ignore
+                                    return
+                                }
+                                lastTopSentinelTrigger = now
+
                                 Task {
                                     await viewModel.loadPastDepartures()
                                 }

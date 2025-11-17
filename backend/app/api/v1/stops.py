@@ -14,7 +14,7 @@ from app.models.stops import (
     StopSearchResponse,
     RouteInStop
 )
-from app.services.realtime_service import get_realtime_departures
+from app.services.realtime_service import get_realtime_departures, get_stop_earliest_departure
 from app.utils.logging import get_logger
 from supabase import Client
 
@@ -275,8 +275,16 @@ async def get_departures(
         if departures:
             earliest_time = min(d['realtime_time_secs'] for d in departures)
             latest_time = max(d['realtime_time_secs'] for d in departures)
+
+            # Dynamic pagination threshold: query actual GTFS earliest departure for this stop
+            # Replaces static 3900 (1:05 AM) with stop-specific earliest time
+            stop_earliest_time = get_stop_earliest_departure(stop_id, service_date)
+            if stop_earliest_time is None:
+                # Fallback to static threshold if query fails
+                stop_earliest_time = 3900
+
             pagination_meta = {
-                "has_more_past": earliest_time > 3900,  # Earliest train ~1:05 AM
+                "has_more_past": earliest_time > stop_earliest_time,  # Dynamic: actual GTFS min time
                 "has_more_future": latest_time < 105723,  # Latest train ~29:22 (next day)
                 "earliest_time_secs": earliest_time,
                 "latest_time_secs": latest_time,

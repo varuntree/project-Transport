@@ -76,6 +76,8 @@ class DeparturesViewModel: ObservableObject {
             return
         }
 
+        // Set flag IMMEDIATELY before async work to prevent race condition
+        // (sentinel .onAppear can re-trigger during scroll bounce)
         isLoadingPast = true
 
         do {

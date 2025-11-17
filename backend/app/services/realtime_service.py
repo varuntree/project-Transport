@@ -318,3 +318,53 @@ def get_realtime_departures(
             duration_ms=duration_ms
         )
         raise
+
+
+def get_stop_earliest_departure(stop_id: str, service_date: str) -> Optional[int]:
+    """Get earliest departure time for a stop from GTFS static data.
+
+    Queries Supabase for MIN(departure_time) for the given stop.
+    Used for dynamic pagination boundary instead of static 3900 threshold.
+
+    Args:
+        stop_id: GTFS stop_id
+        service_date: Service date in YYYY-MM-DD (Sydney time)
+
+    Returns:
+        Earliest departure time in seconds-since-midnight, or None if no departures.
+    """
+    try:
+        supabase = get_supabase()
+
+        # Query MIN(departure_time) from stop_times for this stop
+        # Use pattern model: stop_times table has stop_id, pattern_id, stop_sequence, departure_time
+        result = supabase.table('stop_times') \
+            .select('departure_time') \
+            .eq('stop_id', stop_id) \
+            .order('departure_time', desc=False) \
+            .limit(1) \
+            .execute()
+
+        if result.data and len(result.data) > 0:
+            earliest = result.data[0]['departure_time']
+            logger.info(
+                "stop_earliest_departure_found",
+                stop_id=stop_id,
+                earliest_time_secs=earliest
+            )
+            return earliest
+        else:
+            logger.warning(
+                "stop_earliest_departure_not_found",
+                stop_id=stop_id
+            )
+            return None
+
+    except Exception as exc:
+        logger.error(
+            "stop_earliest_departure_failed",
+            stop_id=stop_id,
+            error=str(exc)
+        )
+        # Fallback to default threshold on error
+        return 3900  # 1:05 AM default
