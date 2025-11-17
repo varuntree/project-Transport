@@ -20,30 +20,30 @@ bug_type: $3 (optional: validation_failed|compile_error|runtime_error, default: 
 
 1. **Checkpoint design:**
    ```bash
-   cat .phase-logs/phase-{phase_number}/checkpoint-{checkpoint_number}-design.md
+   cat .workflow-logs/phases/phase-{phase_number}/checkpoint-{checkpoint_number}-design.md
    ```
 
 2. **Checkpoint result (if exists):**
    ```bash
-   cat .phase-logs/phase-{phase_number}/checkpoint-{checkpoint_number}-result.json
+   cat .workflow-logs/phases/phase-{phase_number}/checkpoint-{checkpoint_number}-result.json
    ```
 
 3. **Validation failure context:**
    ```bash
-   cat .phase-logs/phase-{phase_number}/checkpoint-{checkpoint_number}-validation-failure.json
+   cat .workflow-logs/phases/phase-{phase_number}/checkpoint-{checkpoint_number}-validation-failure.json
    ```
    (Created by orchestrator when validation fails)
 
 4. **Exploration report (lightweight):**
    ```bash
-   cat .phase-logs/phase-{phase_number}/exploration-report.json
+   cat .workflow-logs/phases/phase-{phase_number}/exploration-report.json
    # Load only: critical_patterns array
    ```
 
 5. **Current codebase state:**
    ```bash
    # Files created/modified in checkpoint
-   git diff HEAD~1 -- $(cat .phase-logs/phase-{phase_number}/checkpoint-{checkpoint_number}-result.json | jq -r '.files_created[],.files_modified[]')
+   git diff HEAD~1 -- $(cat .workflow-logs/phases/phase-{phase_number}/checkpoint-{checkpoint_number}-result.json | jq -r '.files_created[],.files_modified[]')
    ```
 
 **Total context: ~2K tokens**
@@ -117,7 +117,7 @@ BUGFIX WORKFLOW:
 4. **Return Structured Result** (see format below)
 
 CONFIDENCE CHECK:
-- iOS bug? → Check .phase-logs/phase-{phase_number}/ios-research-*.md
+- iOS bug? → Check .workflow-logs/phases/phase-{phase_number}/ios-research-*.md
 - External service? → Research docs (WebFetch)
 - Pattern unclear? → Read DEVELOPMENT_STANDARDS.md section
 - If confidence <80%: Return blocker, DON'T guess
@@ -131,7 +131,7 @@ DO NOT:
 
 REFERENCES (Read if needed):
 - Standards: DEVELOPMENT_STANDARDS.md
-- iOS Research: .phase-logs/phase-{phase_number}/ios-research-summary.json (see which files exist)
+- iOS Research: .workflow-logs/phases/phase-{phase_number}/ios-research-summary.json (see which files exist)
 - Architecture: <specs from checkpoint design references>
 
 RETURN FORMAT (JSON):
@@ -194,7 +194,7 @@ Task tool:
 
 1. **Save bugfix result:**
    ```bash
-   echo '<bugfix_json>' > .phase-logs/phase-{phase_number}/checkpoint-{checkpoint_number}-bugfix-result.json
+   echo '<bugfix_json>' > .workflow-logs/phases/phase-{phase_number}/checkpoint-{checkpoint_number}-bugfix-result.json
    ```
 
 2. **Re-run orchestrator validation:**
@@ -207,7 +207,7 @@ Task tool:
    ```bash
    # Commit fix
    git add <files from bugfix result files_modified>
-   git add .phase-logs/phase-{phase_number}/checkpoint-{checkpoint_number}-bugfix-result.json
+   git add .workflow-logs/phases/phase-{phase_number}/checkpoint-{checkpoint_number}-bugfix-result.json
 
    # Amend checkpoint commit (if not pushed) OR create fix commit
    git commit -m "fix(phase-{phase_number}): checkpoint {checkpoint_number} - <fix description>
@@ -235,7 +235,7 @@ Task tool:
 
 1. **Save result:**
    ```bash
-   echo '<bugfix_json>' > .phase-logs/phase-{phase_number}/checkpoint-{checkpoint_number}-bugfix-blocked.json
+   echo '<bugfix_json>' > .workflow-logs/phases/phase-{phase_number}/checkpoint-{checkpoint_number}-bugfix-blocked.json
    ```
 
 2. **Report to user (orchestrator pauses):**
@@ -268,7 +268,7 @@ Task tool:
 
 1. **Save result:**
    ```bash
-   echo '<bugfix_json>' > .phase-logs/phase-{phase_number}/checkpoint-{checkpoint_number}-bugfix-redesign-needed.json
+   echo '<bugfix_json>' > .workflow-logs/phases/phase-{phase_number}/checkpoint-{checkpoint_number}-bugfix-redesign-needed.json
    ```
 
 2. **Orchestrator redesigns checkpoint:**
@@ -298,7 +298,7 @@ echo '{
   "bugfix_status": "<fixed|blocked|needs_redesign>",
   "fix_confidence": <from result>,
   "timestamp": "<ISO 8601>"
-}' >> .phase-logs/phase-{phase_number}/orchestrator-state.json
+}' >> .workflow-logs/phases/phase-{phase_number}/orchestrator-state.json
 ```
 
 ---

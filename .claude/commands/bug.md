@@ -37,7 +37,7 @@ bug_description: $1 (required: user description of bug)
 # Create bug log folder
 timestamp=$(date +%s)
 bug_slug=$(echo "$1" | tr '[:upper:]' '[:lower:]' | tr -s ' ' '-' | tr -cd '[:alnum:]-' | cut -c1-40)
-bug_folder=".bug-logs/${timestamp}-${bug_slug}"
+bug_folder=".workflow-logs/bugs/${timestamp}-${bug_slug}"
 mkdir -p "${bug_folder}"
 
 # Save bug context
@@ -913,7 +913,7 @@ Tag: bug-fix-${timestamp}
 
 **File Structure:**
 ```
-.bug-logs/{timestamp}-{bug-slug}/
+.workflow-logs/bugs/{timestamp}-{bug-slug}/
 ├── bug-context.json          # User input
 ├── map-result.json           # Stage 1 output
 ├── explore-result.json       # Stage 2 output

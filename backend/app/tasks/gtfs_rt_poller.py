@@ -142,6 +142,12 @@ def parse_vehicle_positions(pb_data: bytes) -> list[dict]:
                 continue
 
             vehicle = entity.vehicle
+
+            # Extract occupancy_status (enum 0-8, default 0=EMPTY)
+            occupancy_status = None
+            if vehicle.HasField("occupancy_status"):
+                occupancy_status = vehicle.occupancy_status
+
             vehicle_data = {
                 "vehicle_id": vehicle.vehicle.id if vehicle.HasField("vehicle") else None,
                 "trip_id": vehicle.trip.trip_id if vehicle.HasField("trip") else None,
@@ -151,6 +157,7 @@ def parse_vehicle_positions(pb_data: bytes) -> list[dict]:
                 "bearing": vehicle.position.bearing if vehicle.HasField("position") and vehicle.position.HasField("bearing") else None,
                 "speed": vehicle.position.speed if vehicle.HasField("position") and vehicle.position.HasField("speed") else None,
                 "timestamp": vehicle.timestamp if vehicle.HasField("timestamp") else None,
+                "occupancy_status": occupancy_status,
             }
             vehicles.append(vehicle_data)
 
