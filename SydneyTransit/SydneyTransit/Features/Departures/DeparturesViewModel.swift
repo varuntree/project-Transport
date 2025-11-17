@@ -156,22 +156,33 @@ class DeparturesViewModel: ObservableObject {
     }
 
     private func refreshDeparturesInPlace(stopId: String) async {
-        // Refresh without resetting state (prevents white flash)
+        // Refresh real-time data for EXISTING time window (don't fetch new future departures)
+        // This updates delays/occupancy for already-loaded departures without changing the list
+        guard let earliest = earliestTimeSecs, let latest = latestTimeSecs else {
+            return  // No existing window to refresh
+        }
+
         do {
+            // Fetch departures in the ORIGINAL time window (earliest to latest)
+            // This gets updated real-time data for trips already displayed
             let page = try await repository.fetchDeparturesPage(
                 stopId: stopId,
-                timeSecs: nil,  // Current time
+                timeSecs: earliest,  // Use original earliest time, not now()
                 direction: "future",
-                limit: 15
+                limit: 50  // Larger limit to cover full window
             )
 
-            // Update existing departures, preserving scroll position
-            departures = page.departures
-            loadedDepartureIds = Set(page.departures.map { $0.id })
-            earliestTimeSecs = page.earliestTimeSecs
-            latestTimeSecs = page.latestTimeSecs
-            hasMorePast = page.hasMorePast
-            hasMoreFuture = page.hasMoreFuture
+            // Filter to keep only departures within original window
+            let refreshedDepartures = page.departures.filter { dep in
+                dep.realtimeTimeSecs >= earliest && dep.realtimeTimeSecs <= latest
+            }
+
+            // Update departures list (preserves scroll position)
+            departures = refreshedDepartures
+            loadedDepartureIds = Set(refreshedDepartures.map { $0.id })
+
+            // Keep original boundaries (don't shift window forward)
+            // earliestTimeSecs and latestTimeSecs stay unchanged
 
         } catch {
             // Silent fail (don't disrupt UX)
