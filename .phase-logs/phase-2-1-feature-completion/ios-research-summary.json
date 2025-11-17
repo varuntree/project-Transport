@@ -1,0 +1,36 @@
+{
+  "topics_researched": [
+    {
+      "topic": "SwiftUI List sectionIndexTitles",
+      "file": ".phase-logs/phase-2-1-feature-completion/ios-research-list-section-index.md",
+      "key_finding": "iOS 26+ uses .listSectionIndexVisibility() + .sectionIndexLabel() for A-Z vertical index, requires single-letter section labels",
+      "apple_docs_url": "https://developer.apple.com/documentation/swiftui/view/listsectionindexvisibility(_:)"
+    },
+    {
+      "topic": "SF Symbols for transport modes",
+      "file": ".phase-logs/phase-2-1-feature-completion/ios-research-sf-symbols-transport.md",
+      "key_finding": "Native symbols (tram.fill, lightrail.fill, train.side.front.car, bus.fill, ferry.fill) via Image(systemName:), always add .accessibilityLabel()",
+      "apple_docs_url": "https://developer.apple.com/design/human-interface-guidelines/sf-symbols"
+    },
+    {
+      "topic": "SwiftUI Picker vs segmented control",
+      "file": ".phase-logs/phase-2-1-feature-completion/ios-research-picker-vs-segmented.md",
+      "key_finding": "Segmented control (.pickerStyle(.segmented)) best for 3-7 mutually exclusive options with short labels, avoid in toolbars per iOS HIG",
+      "apple_docs_url": "https://developer.apple.com/documentation/swiftui/segmentedpickerstyle"
+    },
+    {
+      "topic": "NavigationLink with complex state",
+      "file": ".phase-logs/phase-2-1-feature-completion/ios-research-navigationlink-state.md",
+      "key_finding": "Value-based NavigationLink (value: + .navigationDestination(for:)) better for state management, destination view initializes ViewModel with passed data",
+      "apple_docs_url": "https://developer.apple.com/documentation/swiftui/navigationlink"
+    },
+    {
+      "topic": "Accessibility labels for SF Symbols",
+      "file": ".phase-logs/phase-2-1-feature-completion/ios-research-accessibility-labels.md",
+      "key_finding": "SF Symbols require explicit .accessibilityLabel() for VoiceOver (e.g., 'Train stop'), labels should be 1-3 words describing purpose",
+      "apple_docs_url": "https://developer.apple.com/documentation/uikit/supporting-voiceover-in-your-app"
+    }
+  ],
+  "research_complete": true,
+  "blockers": []
+}
