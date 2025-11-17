@@ -8,6 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		AA0000000000000000000001 /* SydneyTransitApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000001 /* SydneyTransitApp.swift */; };
+		4A68F7B3CEA94FAFAB8D68B9 /* DeparturesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DEF813EDD13476B8B426268 /* DeparturesView.swift */; };
+		9AB37B18786D41F2A8697290 /* DeparturesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C7D78E67F5740468A80CF2B /* DeparturesViewModel.swift */; };
+
 		AA9681CF92837B4080BBDDBC5C /* Departure.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBCC5D28B94F9A439E88B893B4 /* Departure.swift */; };
 		AA7F0987B75C6D400FB700E787 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB8136FFA1D3144240813D3791 /* APIClient.swift */; };
 		AA5E5CE0F7F4B34FB996AA004E /* DeparturesRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB678CA7FD585847ED8EF997FE /* DeparturesRepository.swift */; };
@@ -31,6 +34,9 @@
 
 /* Begin PBXFileReference section */
 		BB0000000000000000000001 /* SydneyTransitApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SydneyTransitApp.swift; sourceTree = "<group>"; };
+		0DEF813EDD13476B8B426268 /* DeparturesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeparturesView.swift; sourceTree = "<group>"; };
+		5C7D78E67F5740468A80CF2B /* DeparturesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeparturesViewModel.swift; sourceTree = "<group>"; };
+
 		BBCC5D28B94F9A439E88B893B4 /* Departure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Departure.swift; sourceTree = "<group>"; };
 		BB8136FFA1D3144240813D3791 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		BB678CA7FD585847ED8EF997FE /* DeparturesRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeparturesRepository.swift; sourceTree = "<group>"; };
@@ -271,6 +277,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4A68F7B3CEA94FAFAB8D68B9 /* DeparturesView.swift in Sources */,
+				9AB37B18786D41F2A8697290 /* DeparturesViewModel.swift in Sources */,
+
 				AA0000000000000000000001 /* SydneyTransitApp.swift in Sources */,
 				AA0000000000000000000003 /* Constants.swift in Sources */,
 				AA0000000000000000000004 /* Logger.swift in Sources */,

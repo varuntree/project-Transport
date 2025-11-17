@@ -46,7 +46,7 @@ struct Route: Codable, FetchableRecord, Identifiable {
     }
 }
 
-enum RouteType: Int, CaseIterable {
+enum RouteType: Int, CaseIterable, Identifiable {
     case tram = 0
     case metro = 1
     case rail = 2
@@ -56,6 +56,8 @@ enum RouteType: Int, CaseIterable {
     case aerialLift = 6
     case funicular = 7
     case unknown = -1
+
+    var id: Int { rawValue }
 
     var displayName: String {
         switch self {

@@ -15,11 +15,16 @@ struct DeparturesView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
             } else {
                 ForEach(viewModel.departures) { departure in
-                    DepartureRow(departure: departure)
+                    NavigationLink(value: departure) {
+                        DepartureRow(departure: departure)
+                    }
                 }
             }
         }
         .navigationTitle("Departures")
+        .navigationDestination(for: Departure.self) { departure in
+            TripDetailsView(tripId: departure.tripId)
+        }
         .refreshable {
             await viewModel.loadDepartures(stopId: String(stop.sid))
         }
@@ -48,24 +53,40 @@ struct DepartureRow: View {
                 .background(Color.blue)
                 .clipShape(Circle())
 
-            // Headsign + delay text
+            // Headsign + platform + delay text
             VStack(alignment: .leading, spacing: 4) {
                 Text(departure.headsign)
                     .font(.body)
                     .lineLimit(1)
 
-                if let delayText = departure.delayText {
-                    Text(delayText)
-                        .font(.caption)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 2)
-                        .background(Color.orange)
-                        .cornerRadius(4)
+                HStack(spacing: 8) {
+                    if let platform = departure.platform {
+                        Text("Platform \(platform)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    if let delayText = departure.delayText {
+                        Text(delayText)
+                            .font(.caption)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                            .background(Color.orange)
+                            .cornerRadius(4)
+                    }
                 }
             }
 
             Spacer()
+
+            // Wheelchair icon (if accessible)
+            if departure.wheelchairAccessible == 1 {
+                Image(systemName: "figure.roll")
+                    .foregroundColor(.blue)
+                    .font(.body)
+                    .accessibilityLabel("Wheelchair accessible")
+            }
 
             // Countdown + departure time
             VStack(alignment: .trailing, spacing: 4) {

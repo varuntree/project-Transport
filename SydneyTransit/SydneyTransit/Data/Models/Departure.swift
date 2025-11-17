@@ -1,6 +1,6 @@
 import Foundation
 
-struct Departure: Codable, Identifiable {
+struct Departure: Codable, Identifiable, Hashable {
     let tripId: String
     let routeShortName: String
     let headsign: String
@@ -8,6 +8,8 @@ struct Departure: Codable, Identifiable {
     let realtimeTimeSecs: Int
     let delayS: Int
     let realtime: Bool
+    let platform: String?
+    let wheelchairAccessible: Int
 
     var id: String { tripId }
 
@@ -46,5 +48,7 @@ struct Departure: Codable, Identifiable {
         case realtimeTimeSecs = "realtime_time_secs"
         case delayS = "delay_s"
         case realtime
+        case platform
+        case wheelchairAccessible = "wheelchair_accessible"
     }
 }

@@ -5,6 +5,7 @@ struct RouteListView: View {
     @State private var routesByType: [RouteType: [Route]] = [:]
     @State private var isLoading: Bool = true
     @State private var errorMessage: String?
+    @State private var selectedMode: RouteType? = nil // nil = "All"
 
     var body: some View {
         Group {
@@ -25,30 +26,47 @@ struct RouteListView: View {
                 }
                 .padding()
             } else {
-                List {
-                    ForEach(sortedRouteTypes(), id: \.self) { routeType in
-                        if let routes = routesByType[routeType], !routes.isEmpty {
-                            Section {
-                                ForEach(routes) { route in
-                                    RouteRow(route: route)
-                                }
-                            } header: {
-                                HStack(spacing: 8) {
-                                    // Route type badge
-                                    Text(routeType.displayName.uppercased())
-                                        .font(.caption)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(routeType.color)
-                                        .cornerRadius(4)
+                VStack(spacing: 0) {
+                    // Modality filter segmented control
+                    Picker("Transport Mode", selection: $selectedMode) {
+                        Text("All").tag(RouteType?.none)
+                        ForEach(visibleRouteTypes(), id: \.self) { type in
+                            Text(type.displayName).tag(type as RouteType?)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
 
-                                    Text("(\(routes.count))")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
+                    // Filtered route list
+                    List {
+                        ForEach(filteredRouteTypes(), id: \.self) { routeType in
+                            if let routes = routesByType[routeType], !routes.isEmpty {
+                                Section {
+                                    ForEach(routes) { route in
+                                        RouteRow(route: route)
+                                    }
+                                } header: {
+                                    // Only show section header when showing all routes
+                                    if selectedMode == nil {
+                                        HStack(spacing: 8) {
+                                            // Route type badge
+                                            Text(routeType.displayName.uppercased())
+                                                .font(.caption)
+                                                .fontWeight(.bold)
+                                                .foregroundColor(.white)
+                                                .padding(.horizontal, 8)
+                                                .padding(.vertical, 4)
+                                                .background(routeType.color)
+                                                .cornerRadius(4)
+
+                                            Text("(\(routes.count))")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                        .padding(.vertical, 4)
+                                    }
                                 }
-                                .padding(.vertical, 4)
                             }
                         }
                     }
@@ -58,6 +76,23 @@ struct RouteListView: View {
         .navigationTitle("All Routes")
         .task {
             await loadRoutes()
+        }
+    }
+
+    // Returns route types to show in segmented control (only types with actual routes)
+    private func visibleRouteTypes() -> [RouteType] {
+        let priority: [RouteType] = [.rail, .metro, .bus, .ferry, .tram]
+        return priority.filter { routesByType[$0]?.isEmpty == false }
+    }
+
+    // Returns route types to display in list (filtered by selectedMode)
+    private func filteredRouteTypes() -> [RouteType] {
+        if let selectedMode = selectedMode {
+            // Show only selected type
+            return [selectedMode]
+        } else {
+            // Show all types (sorted by priority)
+            return sortedRouteTypes()
         }
     }
 

@@ -80,23 +80,26 @@ struct StopDetailsView: View {
                 }
                 .padding()
 
-                // Mock departures section (Phase 2 placeholder)
+                // Departures section - navigate to DeparturesView
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Upcoming Departures")
                         .font(.headline)
                         .padding(.horizontal)
 
-                    VStack(spacing: 12) {
-                        Text("Real-time departures coming in Phase 2")
-                            .foregroundColor(.secondary)
-                            .font(.subheadline)
-                            .padding()
-
-                        // Mock departure examples
-                        DeparturePlaceholderRow(route: "T1", destination: "Richmond", time: "3 min")
-                        DeparturePlaceholderRow(route: "T1", destination: "Emu Plains", time: "8 min")
-                        DeparturePlaceholderRow(route: "T2", destination: "Parramatta", time: "12 min")
+                    NavigationLink {
+                        DeparturesView(stop: stop)
+                    } label: {
+                        HStack {
+                            Label("View Departures", systemImage: "clock")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.secondary)
+                        }
+                        .padding()
+                        .background(Color(.systemGray6))
+                        .cornerRadius(8)
                     }
+                    .buttonStyle(PlainButtonStyle())
                     .padding(.horizontal)
                 }
                 .padding(.vertical)
@@ -110,46 +113,6 @@ struct StopDetailsView: View {
         let query = "\(stop.stopLat),\(stop.stopLon)"
         let urlString = "http://maps.apple.com/?q=\(stop.stopName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&ll=\(query)"
         return URL(string: urlString) ?? URL(string: "http://maps.apple.com")!
-    }
-}
-
-// Mock departure row
-struct DeparturePlaceholderRow: View {
-    let route: String
-    let destination: String
-    let time: String
-
-    var body: some View {
-        HStack {
-            // Route badge
-            Text(route)
-                .font(.caption)
-                .fontWeight(.bold)
-                .foregroundColor(.white)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.gray)
-                .cornerRadius(4)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(destination)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                Text("Platform TBA")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-
-            Spacer()
-
-            Text(time)
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundColor(.secondary)
-        }
-        .padding()
-        .background(Color(.systemGray6))
-        .cornerRadius(8)
     }
 }
 

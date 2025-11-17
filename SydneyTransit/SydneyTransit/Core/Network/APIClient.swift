@@ -25,17 +25,20 @@ enum APIError: LocalizedError {
 
 enum APIEndpoint {
     case getDepartures(stopId: String)
+    case getTrip(tripId: String)
 
     var path: String {
         switch self {
         case .getDepartures(let stopId):
             return "/api/v1/stops/\(stopId)/departures"
+        case .getTrip(let tripId):
+            return "/api/v1/trips/\(tripId)"
         }
     }
 
     var method: String {
         switch self {
-        case .getDepartures:
+        case .getDepartures, .getTrip:
             return "GET"
         }
     }
