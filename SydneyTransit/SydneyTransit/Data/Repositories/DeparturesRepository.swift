@@ -12,12 +12,17 @@ class DeparturesRepositoryImpl: DeparturesRepository {
     }
 
     func fetchDepartures(stopId: String) async throws -> [Departure] {
+        struct DeparturesData: Codable {
+            let departures: [Departure]
+            let count: Int
+        }
+
         struct Response: Codable {
-            let data: [Departure]
+            let data: DeparturesData
         }
 
         let endpoint = APIEndpoint.getDepartures(stopId: stopId)
         let response: Response = try await apiClient.request(endpoint)
-        return response.data
+        return response.data.departures
     }
 }

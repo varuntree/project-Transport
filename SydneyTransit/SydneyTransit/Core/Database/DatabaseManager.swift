@@ -2,7 +2,6 @@ import Foundation
 import GRDB
 import Logging
 
-@MainActor
 class DatabaseManager {
     static let shared = DatabaseManager()
 

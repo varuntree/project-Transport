@@ -60,6 +60,14 @@ struct Stop: Codable, FetchableRecord, Identifiable {
         return try Stop.fetchOne(db, sql: sql, arguments: [stopID])
     }
 
+    // Get GTFS stop_id for this stop (for API calls)
+    func getStopID() throws -> String? {
+        return try DatabaseManager.shared.read { db in
+            let sql = "SELECT stop_id FROM dict_stop WHERE sid = ?"
+            return try String.fetchOne(db, sql: sql, arguments: [sid])
+        }
+    }
+
     // Primary route type (most frequent route_type serving this stop)
     // Computed property - queries DB each access (optimize later if needed)
     nonisolated var primaryRouteType: Int? {
@@ -90,10 +98,11 @@ struct Stop: Codable, FetchableRecord, Identifiable {
         case 0: return "tram.fill"           // Tram/Light Rail
         case 1: return "lightrail.fill"      // Metro/Subway
         case 2: return "train.side.front.car" // Rail
-        case 3: return "bus.fill"            // Bus
+        case 3: return "bus.fill"            // Bus (standard GTFS)
         case 4: return "ferry.fill"          // Ferry
         case 5: return "cablecar.fill"       // Cable Tram
-        default: return "mappin.circle.fill" // Generic
+        case 700, 712, 714: return "bus.fill" // NSW Bus variants
+        default: return "mappin.circle.fill" // Generic/Unknown
         }
     }
 
@@ -106,6 +115,7 @@ struct Stop: Codable, FetchableRecord, Identifiable {
         case 3: return "Bus"
         case 4: return "Ferry"
         case 5: return "Cable Tram"
+        case 700, 712, 714: return "Bus"
         default: return "Stop"
         }
     }

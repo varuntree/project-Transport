@@ -21,8 +21,20 @@ class DeparturesViewModel: ObservableObject {
             departures = try await repository.fetchDepartures(stopId: stopId)
         } catch let error as URLError where error.code == .notConnectedToInternet {
             errorMessage = "No internet connection"
+        } catch let error as URLError where error.code == .timedOut {
+            errorMessage = "Request timed out. Please try again."
+        } catch let error as DecodingError {
+            errorMessage = "Invalid response from server"
         } catch {
-            errorMessage = "Failed to load departures"
+            // Check if it's an HTTP error with details
+            let errorDesc = error.localizedDescription
+            if errorDesc.contains("404") {
+                errorMessage = "Stop not found in backend"
+            } else if errorDesc.contains("500") {
+                errorMessage = "Server error. Please try again later."
+            } else {
+                errorMessage = "Failed to load departures: \(errorDesc)"
+            }
         }
 
         isLoading = false

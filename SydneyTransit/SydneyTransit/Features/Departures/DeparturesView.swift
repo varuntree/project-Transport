@@ -1,8 +1,10 @@
 import SwiftUI
+import Logging
 
 struct DeparturesView: View {
     let stop: Stop
     @StateObject private var viewModel = DeparturesViewModel()
+    @State private var stopId: String?
 
     var body: some View {
         List {
@@ -12,6 +14,10 @@ struct DeparturesView: View {
             } else if let errorMessage = viewModel.errorMessage {
                 Text(errorMessage)
                     .foregroundColor(.red)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            } else if viewModel.departures.isEmpty {
+                Text("No upcoming departures")
+                    .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
             } else {
                 ForEach(viewModel.departures) { departure in
@@ -26,13 +32,38 @@ struct DeparturesView: View {
             TripDetailsView(tripId: departure.tripId)
         }
         .refreshable {
-            await viewModel.loadDepartures(stopId: String(stop.sid))
+            if let stopId = stopId {
+                await viewModel.loadDepartures(stopId: stopId)
+            }
         }
         .onAppear {
             Task {
-                await viewModel.loadDepartures(stopId: String(stop.sid))
+                // Get GTFS stop_id from dict_stop table
+                do {
+                    if let gtfsStopId = try stop.getStopID() {
+                        stopId = gtfsStopId
+                        Logger.database.info("Fetching departures", metadata: [
+                            "sid": "\(stop.sid)",
+                            "stop_id": "\(gtfsStopId)",
+                            "stop_name": "\(stop.stopName)"
+                        ])
+                        await viewModel.loadDepartures(stopId: gtfsStopId)
+                        viewModel.startAutoRefresh(stopId: gtfsStopId)
+                    } else {
+                        Logger.database.error("No stop_id mapping found", metadata: [
+                            "sid": "\(stop.sid)",
+                            "stop_name": "\(stop.stopName)"
+                        ])
+                        viewModel.errorMessage = "Stop ID mapping not found"
+                    }
+                } catch {
+                    Logger.database.error("Failed to get stop_id", metadata: [
+                        "sid": "\(stop.sid)",
+                        "error": "\(error.localizedDescription)"
+                    ])
+                    viewModel.errorMessage = "Failed to load stop information"
+                }
             }
-            viewModel.startAutoRefresh(stopId: String(stop.sid))
         }
         .onDisappear {
             viewModel.stopAutoRefresh()

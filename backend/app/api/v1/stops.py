@@ -178,6 +178,7 @@ async def get_departures(
     stop_id: str,
     time_param: Optional[int] = Query(None, alias="time", description="Seconds since midnight Sydney time (default: now)"),
     limit: int = Query(10, ge=1, le=50, description="Max results"),
+    supabase: Client = Depends(get_supabase)
 ):
     """Get real-time departures from stop (merges static schedules + GTFS-RT delays).
 
@@ -187,6 +188,38 @@ async def get_departures(
     start_time_ms = time.time()
 
     try:
+        # Log received stop_id for debugging
+        logger.info("departures_request", stop_id=stop_id, stop_id_type=type(stop_id).__name__)
+
+        # Validate stop_id is non-empty
+        if not stop_id or not stop_id.strip():
+            logger.warning("departures_empty_stop_id")
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": {
+                        "code": "INVALID_STOP_ID",
+                        "message": "Stop ID cannot be empty",
+                        "details": {}
+                    }
+                }
+            )
+
+        # Verify stop exists in database
+        stop_check = supabase.table("stops").select("stop_id, stop_name").eq("stop_id", stop_id).execute()
+        if not stop_check.data:
+            logger.warning("stop_not_found", stop_id=stop_id)
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": {
+                        "code": "STOP_NOT_FOUND",
+                        "message": f"Stop with ID '{stop_id}' does not exist",
+                        "details": {"stop_id": stop_id}
+                    }
+                }
+            )
+
         # Default time to now (seconds since midnight Sydney)
         if time_param is None:
             sydney_tz = pytz.timezone('Australia/Sydney')
