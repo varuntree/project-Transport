@@ -71,6 +71,8 @@ def get_trip_details(trip_id: str) -> dict:
             ps.stop_id,
             ps.arrival_offset_secs,
             s.stop_name,
+            s.stop_lat,
+            s.stop_lon,
             s.wheelchair_boarding
         FROM pattern_stops ps
         JOIN stops s ON ps.stop_id = s.stop_id
@@ -143,10 +145,20 @@ def get_trip_details(trip_id: str) -> dict:
             delay_s = trip_delays.get(stop_id, 0)
             realtime_arrival_secs = arrival_secs + delay_s
 
+            # Extract coordinates (PostGIS: lat = Y, lon = X)
+            stop_lat = ps.get('stop_lat', 0.0)
+            stop_lon = ps.get('stop_lon', 0.0)
+
+            # Log warning if coordinates missing
+            if stop_lat == 0.0 or stop_lon == 0.0:
+                logger.warning("stop_coordinates_missing", stop_id=stop_id, trip_id=trip_id)
+
             stops.append({
                 'stop_id': stop_id,
                 'stop_name': ps['stop_name'],
                 'arrival_time_secs': realtime_arrival_secs,
+                'lat': float(stop_lat) if stop_lat else 0.0,
+                'lon': float(stop_lon) if stop_lon else 0.0,
                 'platform': trip_platforms.get(stop_id),
                 'wheelchair_accessible': ps.get('wheelchair_boarding', 0)
             })
