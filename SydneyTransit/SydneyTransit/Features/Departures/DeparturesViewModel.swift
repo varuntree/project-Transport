@@ -13,7 +13,6 @@ class DeparturesViewModel: ObservableObject {
     private var hasMorePast = true
     private var hasMoreFuture = true
     private var loadedDepartureIds = Set<String>()  // Deduplication by full ID (tripId_scheduledTime)
-    private var allowPastLoading = false  // Prevent auto-loading past on initial render
 
     private let repository: DeparturesRepository
     private var refreshTimer: Timer?
@@ -35,7 +34,6 @@ class DeparturesViewModel: ObservableObject {
         latestTimeSecs = nil
         hasMorePast = true
         hasMoreFuture = true
-        allowPastLoading = false  // Reset: don't auto-load past on fresh load
 
         do {
             let page = try await repository.fetchDeparturesPage(
@@ -73,10 +71,8 @@ class DeparturesViewModel: ObservableObject {
     }
 
     func loadPastDepartures() async {
-        // Don't auto-load past on initial render (user should see current time first)
-        guard allowPastLoading, !isLoadingPast, hasMorePast, let stopId = currentStopId, let earliestTime = earliestTimeSecs else {
-            // Enable for subsequent calls
-            allowPastLoading = true
+        // Check if we should load (not already loading, have more data, have required state)
+        guard !isLoadingPast, hasMorePast, let stopId = currentStopId, let earliestTime = earliestTimeSecs else {
             return
         }
 
