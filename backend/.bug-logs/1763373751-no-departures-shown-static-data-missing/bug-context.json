@@ -1,0 +1,6 @@
+{
+  "timestamp": "2025-11-17T10:02:31Z",
+  "bug_description": "Departures view shows 'No upcoming departures' when viewing stop details. Static GTFS data should show scheduled departures but nothing displays. Real-time updates are separate concern - static timetable data is missing/not being fetched correctly.",
+  "bug_slug": "no-departures-shown-static-data-missing",
+  "reported_by": "user"
+}

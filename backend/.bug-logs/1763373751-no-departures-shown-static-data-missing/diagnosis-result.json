@@ -1,0 +1,107 @@
+{
+  "root_cause": {
+    "description": "GTFS static data in database is incomplete - contains only departures from midnight (00:00) to 08:24 AM. When users view stops after 08:24, API correctly filters departures but returns empty results because no future departures exist in the data. This is a data loading/GTFS pipeline issue, not an API logic bug.",
+    "category": "data_pipeline_issue",
+    "confidence": 0.98,
+    "evidence": [
+      "API test with time=28800 (8AM) returns 3 departures correctly",
+      "API test with time=76224 (9PM current time) returns 0 departures (expected - no data)",
+      "SQL query shows MAX(departure_offset_secs) = 30276 (08:24:36) across all stops for today",
+      "Database has 488,818 pattern_stops total, 473,169 non-zero departures (97% valid)",
+      "3,515 services match today's date (2025-11-17) in calendar table",
+      "Phase 2.1 fixes already implemented correct time handling: stops.py:250 passes time_secs_local correctly",
+      "get_realtime_departures() uses Sydney timezone correctly (lines 117-122)"
+    ],
+    "fundamental_cause": "GTFS data loaded into database is truncated - only contains morning departures (00:00-08:24). Full day's schedule (up to ~23:59) not loaded. GTFS pipeline (Phase 1) either: (1) loaded partial GTFS file, (2) has bug in stop_times parsing, or (3) used test/sample data instead of full NSW GTFS feed."
+  },
+  "affected_layers": [
+    {
+      "layer": "Data Pipeline (Phase 1)",
+      "file": "GTFS loading scripts/pipeline",
+      "lines": null,
+      "issue": "GTFS static data incomplete - only 8.5 hours of schedule loaded (should be ~18-24 hours)"
+    },
+    {
+      "layer": "Database",
+      "file": "pattern_stops table",
+      "lines": null,
+      "issue": "Contains valid data but truncated at 08:24 AM - missing afternoon/evening/night services"
+    }
+  ],
+  "pattern_violations": [],
+  "recommended_fix": {
+    "approach": "Reload GTFS static data using correct NSW Transport GTFS feed. Verify Phase 1 GTFS pipeline loads full stop_times.txt (all 24 hours of service). Check if current data source is test/sample vs production feed.",
+    "files_to_modify": [
+      "Phase 1 GTFS pipeline scripts (check .phase-logs/phase-1/)",
+      "GTFS loader (may need to verify stop_times parsing)",
+      "Database: Re-run GTFS load after fixing pipeline"
+    ],
+    "specific_changes": [
+      "1. Identify GTFS source: check if using full NSW GTFS or sample data",
+      "2. Verify stop_times.txt has departures throughout day (not just morning)",
+      "3. Re-run GTFS load script with full dataset",
+      "4. Validate: SELECT MAX(departure_offset_secs) FROM pattern_stops should be ~86000+ (23:xx hours)",
+      "5. Test API again with current time - should return departures"
+    ],
+    "estimated_complexity": "moderate",
+    "risks": [
+      "GTFS reload will take time (large dataset)",
+      "May need to truncate existing pattern_stops/patterns/trips tables first",
+      "Verify Phase 1 implementation status - may not be fully complete"
+    ]
+  },
+  "api_tests_run": [
+    {
+      "test": "GET /stops/2000327/departures?time=28800",
+      "result": "Returns 3 departures correctly (8AM data exists)",
+      "expected": "API works correctly with valid data"
+    },
+    {
+      "test": "GET /stops/2000327/departures (current time ~21:12)",
+      "result": "Returns 0 departures (no data after 08:24)",
+      "expected": "Should return evening/night departures but data doesn't exist"
+    },
+    {
+      "test": "SQL: MAX(departure_offset_secs) for today",
+      "result": "30276 seconds (08:24:36 AM)",
+      "expected": "Should be ~86000 seconds (23:xx hours) for full day"
+    },
+    {
+      "test": "SQL: COUNT(*) pattern_stops with calendar match",
+      "result": "488,818 total, 3,848 for stop 2015131, 533 for stop 2000327",
+      "expected": "Data exists but truncated at 08:24"
+    }
+  ],
+  "validation_plan": {
+    "reproduction_steps": [
+      "Start backend server",
+      "Test API: curl http://localhost:8000/api/v1/stops/2000327/departures?time=28800",
+      "Observe: Returns departures (data exists for morning)",
+      "Test API: curl http://localhost:8000/api/v1/stops/2000327/departures (no time = current 21:12)",
+      "Observe: Returns empty (no data after 08:24)",
+      "Check SQL: SELECT MAX(departure_offset_secs) FROM pattern_stops",
+      "Confirm: Returns 30276 (08:24) instead of expected ~86000 (23:xx)"
+    ],
+    "fix_validation": [
+      "Reload GTFS data with full NSW Transport feed",
+      "Verify SQL: SELECT MAX(departure_offset_secs) FROM pattern_stops WHERE departure_offset_secs < 86400",
+      "Expected: ~86000+ seconds (evening/night services)",
+      "Test API: curl http://localhost:8000/api/v1/stops/2000327/departures",
+      "Expected: Returns departures at current time (any time of day)",
+      "Test multiple times: morning (8AM), afternoon (3PM), evening (8PM), night (11PM)",
+      "All should return upcoming departures"
+    ]
+  },
+  "additional_findings": {
+    "api_code_status": "CORRECT after Phase 2.1 fixes",
+    "api_code_evidence": [
+      "stops.py:224-230 correctly calculates time_secs using Sydney timezone",
+      "stops.py:250 correctly passes time_secs_local to get_realtime_departures()",
+      "realtime_service.py:117-122 correctly defaults to Sydney timezone if params omitted",
+      "No int(time.time()) bug - that was fixed in Phase 2.1",
+      "API returns correct responses when data exists (8AM test passed)"
+    ],
+    "original_bug_hypothesis_invalid": "Initial hypothesis that stops.py:246 passes int(time.time()) is INCORRECT. Code review shows line 246-250 correctly passes time_secs (not int(time.time())). The old buggy code from EXPLORE stage analysis no longer exists in current codebase.",
+    "gtfs_pipeline_status": "Phase 1 GTFS pipeline likely incomplete or used test data. Need to verify .phase-logs/phase-1/ for implementation details and check GTFS source file used."
+  }
+}

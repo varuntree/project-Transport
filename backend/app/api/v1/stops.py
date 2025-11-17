@@ -243,7 +243,14 @@ async def get_departures(
             )
 
         # Fetch real-time departures (merges static + Redis RT)
-        departures = get_realtime_departures(stop_id, int(time.time()), limit)
+        # Pass Sydney-local service date and seconds since midnight
+        service_date = datetime.now(pytz.timezone('Australia/Sydney')).strftime('%Y-%m-%d')
+        departures = get_realtime_departures(
+            stop_id=stop_id,
+            time_secs_local=time_secs,
+            service_date=service_date,
+            limit=limit
+        )
 
         # Count realtime vs static
         realtime_count = sum(1 for d in departures if d['realtime'])

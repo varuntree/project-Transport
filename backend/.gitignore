@@ -24,3 +24,6 @@ ENV/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Service management
+scripts/.service_pids

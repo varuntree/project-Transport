@@ -1,0 +1,12 @@
+{
+  "timestamp": "2025-11-17T09:55:56Z",
+  "bug_description": "Search stops works, but clicking 'View Departures' shows 'no upcoming departures' even when timetable has scheduled services. Static GTFS data not showing, only real-time attempted. Issue affects all stop types (train/bus/metro).",
+  "bug_slug": "no-departures-showing-static-data-missing",
+  "reported_by": "user",
+  "scope": "Phase 2 - Static departures from GTFS timetable not displaying",
+  "user_constraints": [
+    "No implementation - diagnosis and detailed resolution plan only",
+    "Must test hypotheses before concluding root cause",
+    "Must include comprehensive API test plan in resolution report"
+  ]
+}
