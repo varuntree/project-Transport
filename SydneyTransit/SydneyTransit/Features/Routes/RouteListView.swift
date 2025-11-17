@@ -38,34 +38,36 @@ struct RouteListView: View {
                     .padding(.horizontal)
                     .padding(.vertical, 8)
 
-                    // Filtered route list
-                    List {
-                        ForEach(filteredRouteTypes(), id: \.self) { routeType in
-                            if let routes = routesByType[routeType], !routes.isEmpty {
+                    // Filtered route list with alphabetical sections
+                    let sections = alphabeticalSections()
+                    let sortedLetters = sections.keys.sorted()
+
+                    if #available(iOS 26, *) {
+                        List {
+                            ForEach(sortedLetters, id: \.self) { letter in
                                 Section {
-                                    ForEach(routes) { route in
+                                    ForEach(sections[letter]!) { route in
                                         RouteRow(route: route)
                                     }
                                 } header: {
-                                    // Only show section header when showing all routes
-                                    if selectedMode == nil {
-                                        HStack(spacing: 8) {
-                                            // Route type badge
-                                            Text(routeType.displayName.uppercased())
-                                                .font(.caption)
-                                                .fontWeight(.bold)
-                                                .foregroundColor(.white)
-                                                .padding(.horizontal, 8)
-                                                .padding(.vertical, 4)
-                                                .background(routeType.color)
-                                                .cornerRadius(4)
-
-                                            Text("(\(routes.count))")
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                        }
-                                        .padding(.vertical, 4)
+                                    Text(letter)
+                                        .font(.headline)
+                                }
+                                .sectionIndexLabel(letter)
+                            }
+                        }
+                        .listSectionIndexVisibility(.automatic)
+                    } else {
+                        // iOS <26 fallback: sections without index
+                        List {
+                            ForEach(sortedLetters, id: \.self) { letter in
+                                Section {
+                                    ForEach(sections[letter]!) { route in
+                                        RouteRow(route: route)
                                     }
+                                } header: {
+                                    Text(letter)
+                                        .font(.headline)
                                 }
                             }
                         }
@@ -85,27 +87,37 @@ struct RouteListView: View {
         return priority.filter { routesByType[$0]?.isEmpty == false }
     }
 
-    // Returns route types to display in list (filtered by selectedMode)
-    private func filteredRouteTypes() -> [RouteType] {
+    // Returns filtered routes based on selected mode
+    private func filteredRoutes() -> [Route] {
         if let selectedMode = selectedMode {
-            // Show only selected type
-            return [selectedMode]
+            // Show only routes of selected type
+            return routesByType[selectedMode] ?? []
         } else {
-            // Show all types (sorted by priority)
-            return sortedRouteTypes()
+            // Show all routes
+            return routesByType.values.flatMap { $0 }
         }
     }
 
-    private func sortedRouteTypes() -> [RouteType] {
-        // Sort by display priority (rail, metro, bus, ferry, tram, others)
-        let priority: [RouteType] = [.rail, .metro, .bus, .ferry, .tram]
-        var types = Array(routesByType.keys)
-        types.sort { type1, type2 in
-            let index1 = priority.firstIndex(of: type1) ?? Int.max
-            let index2 = priority.firstIndex(of: type2) ?? Int.max
-            return index1 < index2
+    // Groups filtered routes alphabetically by first letter
+    private func alphabeticalSections() -> [String: [Route]] {
+        let routes = filteredRoutes()
+
+        // Sort routes alphabetically
+        let sortedRoutes = routes.sorted { $0.displayName < $1.displayName }
+
+        // Group by first letter (uppercase)
+        let sections = Dictionary(grouping: sortedRoutes) { route in
+            let firstChar = route.displayName.prefix(1).uppercased()
+            // Check if first character is a letter
+            if firstChar.rangeOfCharacter(from: .letters) != nil {
+                return firstChar
+            } else {
+                // Numeric or symbol routes go under "#"
+                return "#"
+            }
         }
-        return types
+
+        return sections
     }
 
     @MainActor
