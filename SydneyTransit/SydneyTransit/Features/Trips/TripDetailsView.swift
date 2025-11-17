@@ -1,21 +1,31 @@
 import SwiftUI
+import MapKit
 
 struct TripDetailsView: View {
     let tripId: String
     @StateObject private var viewModel = TripDetailsViewModel()
 
     var body: some View {
-        List {
-            if viewModel.isLoading {
-                ProgressView("Loading trip details...")
-                    .frame(maxWidth: .infinity, alignment: .center)
-            } else if let errorMessage = viewModel.errorMessage {
-                Text(errorMessage)
-                    .foregroundColor(.red)
-                    .frame(maxWidth: .infinity, alignment: .center)
-            } else if let trip = viewModel.trip {
-                ForEach(trip.stops) { tripStop in
-                    TripStopRow(tripStop: tripStop)
+        VStack(spacing: 0) {
+            // Show map if coordinates are available
+            if let trip = viewModel.trip, trip.stops.allSatisfy({ $0.lat != nil && $0.lon != nil }) {
+                TripMapView(stops: trip.stops)
+                    .frame(height: 200)
+                    .accessibilityLabel("Route Map")
+            }
+
+            List {
+                if viewModel.isLoading {
+                    ProgressView("Loading trip details...")
+                        .frame(maxWidth: .infinity, alignment: .center)
+                } else if let errorMessage = viewModel.errorMessage {
+                    Text(errorMessage)
+                        .foregroundColor(.red)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                } else if let trip = viewModel.trip {
+                    ForEach(trip.stops) { tripStop in
+                        TripStopRow(tripStop: tripStop)
+                    }
                 }
             }
         }

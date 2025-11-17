@@ -32,6 +32,8 @@ struct TripStop: Codable, Identifiable {
     let arrivalTimeSecs: Int
     let platform: String?
     let wheelchairAccessible: Int
+    let lat: Double?
+    let lon: Double?
 
     var id: String { stopId }
 
@@ -49,5 +51,7 @@ struct TripStop: Codable, Identifiable {
         case arrivalTimeSecs = "arrival_time_secs"
         case platform
         case wheelchairAccessible = "wheelchair_accessible"
+        case lat
+        case lon
     }
 }

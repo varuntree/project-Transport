@@ -16,6 +16,7 @@
 		AA5E5CE0F7F4B34FB996AA004E /* DeparturesRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB678CA7FD585847ED8EF997FE /* DeparturesRepository.swift */; };
 		AA1A2B3C4D5E6F7A8B9C0D1E2F /* TripDetailsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F7A8B9C0D1E2F /* TripDetailsView.swift */; };
 		AA2B3C4D5E6F7A8B9C0D1E2F3A /* TripDetailsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B3C4D5E6F7A8B9C0D1E2F3A /* TripDetailsViewModel.swift */; };
+		AA5E6F7A8B9C0D1E2F3A4B5C6D /* TripMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E6F7A8B9C0D1E2F3A4B5C6D /* TripMapView.swift */; };
 		AA3C4D5E6F7A8B9C0D1E2F3A4B /* Trip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C4D5E6F7A8B9C0D1E2F3A4B /* Trip.swift */; };
 		AA4D5E6F7A8B9C0D1E2F3A4B5C /* TripRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D5E6F7A8B9C0D1E2F3A4B5C /* TripRepository.swift */; };
 		AA0000000000000000000002 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000002 /* Assets.xcassets */; };
@@ -46,6 +47,7 @@
 		BB678CA7FD585847ED8EF997FE /* DeparturesRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SydneyTransit/Data/Repositories/DeparturesRepository.swift"; sourceTree = "<group>"; };
 		1A2B3C4D5E6F7A8B9C0D1E2F /* TripDetailsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SydneyTransit/Features/Trips/TripDetailsView.swift"; sourceTree = "<group>"; };
 		2B3C4D5E6F7A8B9C0D1E2F3A /* TripDetailsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SydneyTransit/Features/Trips/TripDetailsViewModel.swift"; sourceTree = "<group>"; };
+		5E6F7A8B9C0D1E2F3A4B5C6D /* TripMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SydneyTransit/Features/Trips/TripMapView.swift"; sourceTree = "<group>"; };
 		3C4D5E6F7A8B9C0D1E2F3A4B /* Trip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SydneyTransit/Data/Models/Trip.swift"; sourceTree = "<group>"; };
 		4D5E6F7A8B9C0D1E2F3A4B5C /* TripRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SydneyTransit/Data/Repositories/TripRepository.swift"; sourceTree = "<group>"; };
 		BB0000000000000000000002 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -292,6 +294,7 @@
 				AA5E5CE0F7F4B34FB996AA004E /* DeparturesRepository.swift in Sources */,
 				AA1A2B3C4D5E6F7A8B9C0D1E2F /* TripDetailsView.swift in Sources */,
 				AA2B3C4D5E6F7A8B9C0D1E2F3A /* TripDetailsViewModel.swift in Sources */,
+				AA5E6F7A8B9C0D1E2F3A4B5C6D /* TripMapView.swift in Sources */,
 				AA3C4D5E6F7A8B9C0D1E2F3A4B /* Trip.swift in Sources */,
 				AA4D5E6F7A8B9C0D1E2F3A4B5C /* TripRepository.swift in Sources */,
 				AA0000000000000000000001 /* SydneyTransitApp.swift in Sources */,
