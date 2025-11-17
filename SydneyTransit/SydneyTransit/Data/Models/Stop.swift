@@ -95,12 +95,13 @@ struct Stop: Codable, FetchableRecord, Identifiable {
     // Transport mode SF Symbol icon
     var transportIcon: String {
         switch primaryRouteType {
-        case 0: return "tram.fill"           // Tram/Light Rail
+        case 0, 900: return "tram.fill"           // Tram/Light Rail (900=NSW Light Rail)
         case 1: return "lightrail.fill"      // Metro/Subway
         case 2: return "train.side.front.car" // Rail
         case 3: return "bus.fill"            // Bus (standard GTFS)
         case 4: return "ferry.fill"          // Ferry
         case 5: return "cablecar.fill"       // Cable Tram
+        case 401: return "lightrail.fill"    // NSW Metro
         case 700, 712, 714: return "bus.fill" // NSW Bus variants
         default: return "mappin.circle.fill" // Generic/Unknown
         }
@@ -109,12 +110,13 @@ struct Stop: Codable, FetchableRecord, Identifiable {
     // Route type display name (for accessibility)
     var routeTypeDisplayName: String {
         switch primaryRouteType {
-        case 0: return "Tram"
+        case 0, 900: return "Light Rail"  // 900=NSW Light Rail
         case 1: return "Metro"
         case 2: return "Train"
         case 3: return "Bus"
         case 4: return "Ferry"
         case 5: return "Cable Tram"
+        case 401: return "Metro"  // NSW Metro
         case 700, 712, 714: return "Bus"
         default: return "Stop"
         }

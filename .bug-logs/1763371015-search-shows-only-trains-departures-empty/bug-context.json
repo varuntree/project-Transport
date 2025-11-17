@@ -1,0 +1,7 @@
+{
+  "timestamp": "2025-11-17T09:16:55Z",
+  "bug_description": "Two issues: 1) Search stops returns only train stations, missing bus/other modalities even when they exist 2) Bus stop departures show empty list instead of actual static GTFS data. Static data should be first preference.",
+  "bug_slug": "search-shows-only-trains-departures-empty",
+  "reported_by": "user",
+  "context": "Phase 2.1 completed, issues prevent Phase 3 start"
+}

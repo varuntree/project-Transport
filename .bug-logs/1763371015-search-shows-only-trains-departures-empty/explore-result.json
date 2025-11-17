@@ -1,0 +1,305 @@
+{
+  "bugs": [
+    {
+      "bug_id": 1,
+      "description": "Search shows only trains (missing bus/ferry/metro/light rail stops)",
+      "severity": "CRITICAL",
+      "data_flow": [
+        {
+          "layer": "iOS UI",
+          "component": "SearchView",
+          "file": "/Users/varunprasad/code/prjs/prj_transport/SydneyTransit/SydneyTransit/Features/Search/SearchView.swift",
+          "line_range": "97-127",
+          "purpose": "User input, debounce, call performSearch",
+          "status": "NO BUG - works correctly"
+        },
+        {
+          "layer": "iOS ViewModel",
+          "component": "SearchView.performSearch()",
+          "file": "/Users/varunprasad/code/prjs/prj_transport/SydneyTransit/SydneyTransit/Features/Search/SearchView.swift",
+          "line_range": "97-127",
+          "purpose": "Calls DatabaseManager.read -> Stop.search()",
+          "status": "NO BUG - passes query directly"
+        },
+        {
+          "layer": "iOS Database (GRDB)",
+          "component": "Stop.search() FTS5 query",
+          "file": "/Users/varunprasad/code/prjs/prj_transport/SydneyTransit/SydneyTransit/Data/Models/Stop.swift",
+          "line_range": "24-45",
+          "purpose": "FTS5 MATCH query on stops_fts table",
+          "status": "NO BUG - SQL correct, no location_type filter",
+          "sql": "SELECT s.* FROM stops s JOIN stops_fts fts ON s.sid = fts.sid WHERE stops_fts MATCH ? LIMIT 50",
+          "observation": "SQL query is correct - NO location_type filtering"
+        },
+        {
+          "layer": "iOS Model",
+          "component": "Stop.primaryRouteType",
+          "file": "/Users/varunprasad/code/prjs/prj_transport/SydneyTransit/SydneyTransit/Data/Models/Stop.swift",
+          "line_range": "71-93",
+          "purpose": "Computes most frequent route_type for this stop (for icon)",
+          "status": "LIKELY BUG - may return nil for bus stops, hiding them in results",
+          "sql": "SELECT r.route_type FROM pattern_stops ps JOIN patterns p ON ps.pid = p.pid JOIN routes r ON p.rid = r.rid WHERE ps.sid = ? GROUP BY r.route_type ORDER BY COUNT(*) DESC LIMIT 1",
+          "observation": "Query may fail if stops table SID doesn't match pattern_stops SID, or if bus route data missing from pattern model"
+        },
+        {
+          "layer": "iOS UI Rendering",
+          "component": "SearchView result rendering",
+          "file": "/Users/varunprasad/code/prjs/prj_transport/SydneyTransit/SydneyTransit/Features/Search/SearchView.swift",
+          "line_range": "32-56",
+          "purpose": "Renders Stop.transportIcon and Stop.routeTypeDisplayName",
+          "status": "SUSPECT - may filter out stops with nil primaryRouteType",
+          "observation": "If primaryRouteType is nil, transportIcon returns 'mappin.circle.fill' and routeTypeDisplayName returns 'Stop' - but view should still render these"
+        }
+      ],
+      "relevant_files": [
+        {
+          "path": "/Users/varunprasad/code/prjs/prj_transport/SydneyTransit/SydneyTransit/Features/Search/SearchView.swift",
+          "reason": "Search UI and performSearch logic",
+          "critical_sections": [
+            "L97-127: performSearch() - calls Stop.search()",
+            "L32-56: ForEach(searchResults) - renders stops with icons"
+          ]
+        },
+        {
+          "path": "/Users/varunprasad/code/prjs/prj_transport/SydneyTransit/SydneyTransit/Data/Models/Stop.swift",
+          "reason": "Stop model with search query and primaryRouteType",
+          "critical_sections": [
+            "L24-45: Stop.search() FTS5 query - NO FILTER BUG",
+            "L71-93: primaryRouteType computed property - SUSPECT",
+            "L96-121: transportIcon/routeTypeDisplayName - relies on primaryRouteType"
+          ]
+        }
+      ],
+      "gtfs_data_check": {
+        "table": "stops",
+        "schema": "sid INTEGER PRIMARY KEY, stop_code TEXT, stop_name TEXT NOT NULL, stop_lat REAL NOT NULL, stop_lon REAL NOT NULL, location_type INTEGER, parent_station TEXT, wheelchair_boarding INTEGER, platform_code TEXT",
+        "total_stops": 30397,
+        "location_type_distribution": {
+          "0 (stop/platform)": 755,
+          "1 (station)": 255,
+          "NULL (actual stops)": 29387
+        },
+        "bus_stops_exist": "YES - 29387 stops with NULL location_type (includes bus stops)",
+        "bus_route_data_exists": "YES - 193400 pattern_stops rows for route_type=700 (bus)",
+        "sample_bus_stop": {
+          "sid": 357,
+          "stop_name": "Memorial, Liverpool-Parramatta Twy",
+          "stop_code": null,
+          "location_type": null,
+          "gtfs_stop_id": "2170586",
+          "route_type": 700,
+          "departures_count": 3
+        },
+        "suspected_issue": "primaryRouteType SQL query may be failing for bus stops, causing nil return which hides them from search results (or SearchView filters nil results)"
+      },
+      "root_cause_hypothesis": "SearchView may be filtering out stops where primaryRouteType is nil (bus stops with NULL location_type), OR primaryRouteType query is failing for bus stops due to missing JOIN paths in pattern model"
+    },
+    {
+      "bug_id": 2,
+      "description": "Bus stop departures show empty list instead of static GTFS data",
+      "severity": "CRITICAL",
+      "data_flow": [
+        {
+          "layer": "iOS UI",
+          "component": "DeparturesView",
+          "file": "/Users/varunprasad/code/prjs/prj_transport/SydneyTransit/SydneyTransit/Features/Departures/DeparturesView.swift",
+          "line_range": "36-64",
+          "purpose": "onAppear: get GTFS stop_id from dict_stop, call viewModel.loadDepartures()",
+          "status": "NO BUG - correctly maps sid -> stop_id via Stop.getStopID()"
+        },
+        {
+          "layer": "iOS ViewModel",
+          "component": "DeparturesViewModel.loadDepartures()",
+          "file": "/Users/varunprasad/code/prjs/prj_transport/SydneyTransit/SydneyTransit/Features/Departures/DeparturesViewModel.swift",
+          "line_range": "16-41",
+          "purpose": "Calls repository.fetchDepartures(stopId)",
+          "status": "NO BUG - passes stopId correctly"
+        },
+        {
+          "layer": "iOS Repository",
+          "component": "DeparturesRepository.fetchDepartures()",
+          "file": "/Users/varunprasad/code/prjs/prj_transport/SydneyTransit/SydneyTransit/Data/Repositories/DeparturesRepository.swift",
+          "line_range": "14-27",
+          "purpose": "Calls APIClient.request(getDepartures)",
+          "status": "NO BUG - sends correct stop_id to backend"
+        },
+        {
+          "layer": "iOS Network",
+          "component": "APIClient GET /api/v1/stops/{stop_id}/departures",
+          "file": "/Users/varunprasad/code/prjs/prj_transport/SydneyTransit/SydneyTransit/Core/Network/APIClient.swift",
+          "line_range": "27-53",
+          "purpose": "HTTP GET to backend",
+          "status": "NO BUG - constructs correct URL with stop_id"
+        },
+        {
+          "layer": "Backend API",
+          "component": "/api/v1/stops/{stop_id}/departures endpoint",
+          "file": "/Users/varunprasad/code/prjs/prj_transport/backend/app/api/v1/stops.py",
+          "line_range": "176-293",
+          "purpose": "Validate stop_id, calculate time_secs, call get_realtime_departures()",
+          "status": "NO BUG - validates stop exists, calls service correctly"
+        },
+        {
+          "layer": "Backend Service",
+          "component": "get_realtime_departures()",
+          "file": "/Users/varunprasad/code/prjs/prj_transport/backend/app/services/realtime_service.py",
+          "line_range": "87-288",
+          "purpose": "Fetch static schedules from Supabase pattern_stops, merge with Redis RT delays",
+          "status": "CRITICAL BUG - SQL query at L161-167 uses WRONG SCHEMA",
+          "sql": "SELECT ... FROM pattern_stops ps JOIN patterns p ON ps.pattern_id = p.pattern_id JOIN trips t ON t.pattern_id = p.pattern_id JOIN routes r ON t.route_id = r.route_id JOIN calendar c ON t.service_id = c.service_id WHERE ps.stop_id = '{stop_id}' AND ...",
+          "observation": "Backend query uses Supabase schema (pattern_id, route_id, stop_id as TEXT) but iOS bundled DB uses compressed pattern model (pid, rid, sid as INTEGER). Backend query is correct for Supabase, BUT Supabase may be missing bus stop data OR calendar data is stale"
+        },
+        {
+          "layer": "Backend Database (Supabase)",
+          "component": "pattern_stops table",
+          "file": "N/A (Supabase Postgres)",
+          "line_range": "N/A",
+          "purpose": "Static GTFS schedules (pattern model)",
+          "status": "UNKNOWN - need to verify bus stop data exists in Supabase pattern_stops",
+          "observation": "iOS bundled gtfs.db has bus data (193400 pattern_stops for route_type=700), but backend Supabase may be missing this data OR calendar table may be stale (no active service_ids for today's date)"
+        }
+      ],
+      "relevant_files": [
+        {
+          "path": "/Users/varunprasad/code/prjs/prj_transport/SydneyTransit/SydneyTransit/Features/Departures/DeparturesView.swift",
+          "reason": "Departures UI, stop_id mapping via getStopID()",
+          "critical_sections": [
+            "L36-64: onAppear - calls stop.getStopID() to get GTFS stop_id",
+            "L40-47: Passes gtfsStopId to viewModel.loadDepartures()"
+          ]
+        },
+        {
+          "path": "/Users/varunprasad/code/prjs/prj_transport/SydneyTransit/SydneyTransit/Data/Models/Stop.swift",
+          "reason": "Stop.getStopID() maps sid -> stop_id via dict_stop",
+          "critical_sections": [
+            "L64-69: getStopID() - queries dict_stop table for GTFS stop_id"
+          ]
+        },
+        {
+          "path": "/Users/varunprasad/code/prjs/prj_transport/backend/app/services/realtime_service.py",
+          "reason": "Backend service that fetches static departures from Supabase",
+          "critical_sections": [
+            "L143-167: SQL query for static departures - uses pattern_stops",
+            "L161: WHERE ps.stop_id = '{stop_id}' - expects GTFS stop_id as TEXT",
+            "L162-164: Calendar filter - may be returning 0 rows if calendar stale"
+          ]
+        },
+        {
+          "path": "/Users/varunprasad/code/prjs/prj_transport/backend/app/api/v1/stops.py",
+          "reason": "Departures API endpoint",
+          "critical_sections": [
+            "L176-293: /stops/{stop_id}/departures endpoint",
+            "L224-230: Calculate time_secs from Sydney timezone",
+            "L246: Call get_realtime_departures(stop_id, now_secs, limit)"
+          ]
+        }
+      ],
+      "gtfs_data_check": {
+        "ios_bundled_db": {
+          "table": "pattern_stops",
+          "schema": "pid INTEGER NOT NULL, stop_sequence INTEGER NOT NULL, sid INTEGER NOT NULL, arrival_offset_secs INTEGER NOT NULL, departure_offset_secs INTEGER NOT NULL, PRIMARY KEY (pid, stop_sequence)",
+          "bus_data_exists": "YES - 193400 pattern_stops rows for route_type=700",
+          "sample_bus_stop_departures": {
+            "sid": 357,
+            "stop_id": "2170586",
+            "departures": [
+              {"departure_offset_secs": 3480, "route_short_name": "T80", "route_type": 700},
+              {"departure_offset_secs": 2400, "route_short_name": "T80", "route_type": 700},
+              {"departure_offset_secs": 1080, "route_short_name": "T80", "route_type": 700}
+            ]
+          },
+          "calendar_data": {
+            "active_services_for_2025-01-17": 1,
+            "schema": "service_id TEXT PRIMARY KEY, days INTEGER NOT NULL, start_date TEXT NOT NULL, end_date TEXT NOT NULL"
+          }
+        },
+        "supabase_db": {
+          "status": "UNKNOWN - need to query Supabase to verify",
+          "suspected_issues": [
+            "pattern_stops table may be missing bus stop data (route_type=700)",
+            "calendar table may be stale (no service_ids for current date)",
+            "GTFS ingestion may have filtered out bus routes",
+            "Data pipeline may not have run for bus GTFS feed"
+          ]
+        },
+        "suspected_issue": "Backend Supabase pattern_stops table is missing bus stop data OR calendar table is stale, causing SQL query to return 0 rows. iOS bundled DB has correct data but is offline-only (no backend fallback)"
+      },
+      "root_cause_hypothesis": "Backend Supabase database is missing bus stop pattern_stops data OR calendar table is stale, causing get_realtime_departures() SQL query to return empty results. iOS app correctly sends stop_id='2170586' but backend returns empty departures list. Need to verify Supabase data integrity."
+    }
+  ],
+  "related_patterns": [
+    {
+      "pattern": "Repository protocol pattern (iOS)",
+      "reference": "CLAUDE.md - iOS structure section",
+      "used_in": [
+        "DeparturesRepository",
+        "StopRepository (implied but not found in codebase)"
+      ],
+      "observation": "DeparturesRepository is API-only, no offline GRDB fallback for static schedules"
+    },
+    {
+      "pattern": "Pattern model (compressed GTFS)",
+      "reference": "DATA_ARCHITECTURE.md - Pattern model section",
+      "used_in": [
+        "iOS bundled gtfs.db (pattern_stops with pid/rid/sid integers)",
+        "Backend Supabase (pattern_stops with pattern_id/route_id/stop_id TEXT)"
+      ],
+      "observation": "Schema mismatch between iOS (compressed integers) and backend (full GTFS IDs)"
+    },
+    {
+      "pattern": "FTS5 search (iOS)",
+      "reference": "Stop.swift L24-45",
+      "used_in": "Stop.search() for stop name/code search",
+      "observation": "FTS5 query is correct, no location_type filtering"
+    },
+    {
+      "pattern": "Offline-first (iOS)",
+      "reference": "CLAUDE.md - Critical Principles",
+      "used_in": "iOS bundled gtfs.db for static data",
+      "observation": "DeparturesRepository does NOT implement offline fallback - only calls API"
+    }
+  ],
+  "phase_artifacts": [
+    {
+      "phase": "2.1-fixes",
+      "design": "specs/phase-2-1-fixes-plan.md",
+      "completion": ".phase-logs/phase-2-1-fixes/REPORT.md",
+      "relevant_sections": [
+        "Checkpoint 1: Fixed departures time filtering (added WHERE ps.departure_offset_secs >= {time_secs})",
+        "Checkpoint 3: Fixed route modalities (extended RouteType enum to include NSW GTFS types 401/700/712/714/900)"
+      ],
+      "observation": "Phase 2.1 fixes addressed time filtering and route enum, but did NOT address search filtering or empty departures for bus stops"
+    },
+    {
+      "phase": "2",
+      "design": "oracle/phases/PHASE_2_REALTIME.md",
+      "completion": ".phase-logs/phase-2/phase-completion.json",
+      "relevant_sections": [
+        "Implemented GTFS-RT polling with Redis cache",
+        "Implemented departures API endpoint",
+        "Implemented DeparturesView with real-time updates"
+      ],
+      "observation": "Phase 2 implemented real-time departures but may have only tested with train stations, missing bus stop coverage"
+    }
+  ],
+  "exploration_summary": "Traced both bugs through complete data flow. Bug 1 (search shows only trains): primaryRouteType query may be failing for bus stops OR SearchView filtering nil results. Bug 2 (bus departures empty): Backend Supabase database likely missing bus stop pattern_stops data OR calendar table stale. iOS bundled DB has correct data (193400 bus pattern_stops) but DeparturesRepository has no offline fallback. CRITICAL: Need to verify Supabase data integrity and add offline fallback to DeparturesRepository.",
+  "critical_observations": [
+    "iOS bundled gtfs.db has complete bus stop data (193400 pattern_stops for route_type=700)",
+    "dict_stop mapping is complete (30397/30397 stops have stop_id mappings)",
+    "Backend SQL query uses correct schema for Supabase (pattern_id/route_id/stop_id as TEXT)",
+    "DeparturesRepository is API-only, no offline GRDB fallback despite offline-first architecture principle",
+    "Phase 2.1 fixes addressed route enum and time filtering but NOT bus stop coverage",
+    "Stop.search() FTS5 query is correct - NO location_type filtering",
+    "Stop.primaryRouteType may return nil for bus stops, causing SearchView to filter them out"
+  ],
+  "recommended_next_steps": [
+    "Stage 3 (Diagnose): Query Supabase pattern_stops for route_type=700 to verify bus data exists",
+    "Stage 3 (Diagnose): Query Supabase calendar table to verify active service_ids for current date",
+    "Stage 3 (Diagnose): Add debug logging to Stop.primaryRouteType to see if it returns nil for bus stops",
+    "Stage 3 (Diagnose): Add debug logging to SearchView to see if it filters out stops with nil primaryRouteType",
+    "Stage 4 (Fix): If Supabase missing bus data, re-run GTFS ingestion with bus feed",
+    "Stage 4 (Fix): If calendar stale, update calendar table with current service_ids",
+    "Stage 4 (Fix): Add offline fallback to DeparturesRepository to query iOS bundled DB if API fails",
+    "Stage 4 (Fix): Fix Stop.primaryRouteType to handle bus stops gracefully (or remove filtering in SearchView)"
+  ]
+}
