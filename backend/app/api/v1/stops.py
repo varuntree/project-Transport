@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import Optional
 import time
 from datetime import datetime
+import pytz
 
 from app.db.supabase_client import get_supabase
 from app.models.stops import (
@@ -13,6 +14,7 @@ from app.models.stops import (
     StopSearchResponse,
     RouteInStop
 )
+from app.services.realtime_service import get_realtime_departures
 from app.utils.logging import get_logger
 from supabase import Client
 
@@ -174,54 +176,54 @@ async def get_stop(
 @router.get("/stops/{stop_id}/departures")
 async def get_departures(
     stop_id: str,
-    time_param: Optional[int] = Query(None, alias="time", description="Unix epoch seconds (default: now)"),
-    limit: int = Query(20, ge=1, le=50, description="Max results"),
-    supabase: Client = Depends(get_supabase)
+    time_param: Optional[int] = Query(None, alias="time", description="Seconds since midnight Sydney time (default: now)"),
+    limit: int = Query(10, ge=1, le=50, description="Max results"),
 ):
-    """Get scheduled departures from stop (pattern model query)
+    """Get real-time departures from stop (merges static schedules + GTFS-RT delays).
 
-    Note: Phase 1 returns static schedule data without real-time predictions.
-    Phase 2 adds GTFS-RT merging for live departure times.
+    Phase 2: Returns real-time predictions with delay_s and realtime flag.
+    Graceful degradation to static schedules if Redis cache unavailable.
     """
     start_time_ms = time.time()
 
     try:
-        # Use current time if not provided
-        now_epoch = time_param if time_param else int(time.time())
-        now_date = datetime.utcfromtimestamp(now_epoch).strftime("%Y-%m-%d")
+        # Default time to now (seconds since midnight Sydney)
+        if time_param is None:
+            sydney_tz = pytz.timezone('Australia/Sydney')
+            now = datetime.now(sydney_tz)
+            midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            time_secs = int((now - midnight).total_seconds())
+        else:
+            time_secs = time_param
 
-        # Simplified query - just get trips serving this stop
-        # Phase 2 will add proper time-based filtering and real-time data
-        query = f"""
-        SELECT
-            t.trip_id,
-            t.trip_headsign,
-            t.direction_id,
-            r.route_short_name,
-            r.route_long_name,
-            r.route_type,
-            r.route_color,
-            ps.departure_offset_secs,
-            ps.stop_sequence
-        FROM pattern_stops ps
-        JOIN patterns p ON ps.pattern_id = p.pattern_id
-        JOIN trips t ON t.pattern_id = p.pattern_id
-        JOIN routes r ON t.route_id = r.route_id
-        JOIN calendar c ON t.service_id = c.service_id
-        WHERE ps.stop_id = '{stop_id}'
-          AND c.start_date <= '{now_date}'
-          AND c.end_date >= '{now_date}'
-        ORDER BY r.route_short_name, ps.departure_offset_secs ASC
-        LIMIT {limit}
-        """
+        # Validate time range (0-86399, seconds in a day)
+        if not (0 <= time_secs < 86400):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": {
+                        "code": "INVALID_TIME",
+                        "message": "Time parameter must be between 0 and 86399 (seconds since midnight)",
+                        "details": {"time": time_secs}
+                    }
+                }
+            )
 
-        result = supabase.rpc("exec_raw_sql", {"query": query}).execute()
-        departures = result.data or []
+        # Fetch real-time departures (merges static + Redis RT)
+        departures = get_realtime_departures(stop_id, int(time.time()), limit)
+
+        # Count realtime vs static
+        realtime_count = sum(1 for d in departures if d['realtime'])
+        static_count = len(departures) - realtime_count
 
         duration_ms = int((time.time() - start_time_ms) * 1000)
         logger.info("departures_fetched",
-                   stop_id=stop_id, time_epoch=now_epoch,
-                   result_count=len(departures), duration_ms=duration_ms)
+                   stop_id=stop_id,
+                   time_secs=time_secs,
+                   total_count=len(departures),
+                   realtime_count=realtime_count,
+                   static_count=static_count,
+                   duration_ms=duration_ms)
 
         return {
             "data": {
@@ -229,17 +231,30 @@ async def get_departures(
                 "count": len(departures)
             },
             "meta": {
-                "pagination": {
-                    "offset": 0,
-                    "limit": limit,
-                    "total": len(departures)
-                },
+                "pagination": None,  # Not paginated
                 "query": {
                     "stop_id": stop_id,
-                    "time": now_epoch
+                    "time_secs": time_secs
                 }
             }
         }
+
+    except HTTPException:
+        # Re-raise validation errors
+        raise
     except Exception as e:
-        logger.error("departures_fetch_failed", stop_id=stop_id, error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to fetch departures: {str(e)}")
+        duration_ms = int((time.time() - start_time_ms) * 1000)
+        logger.error("departures_fetch_failed",
+                    stop_id=stop_id,
+                    error=str(e),
+                    duration_ms=duration_ms)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": {
+                    "code": "DEPARTURES_FETCH_FAILED",
+                    "message": f"Failed to fetch departures: {str(e)}",
+                    "details": {}
+                }
+            }
+        )

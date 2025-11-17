@@ -1,0 +1,1 @@
+{"status":"complete","checkpoint":8,"files_created":["SydneyTransit/SydneyTransit/Features/Departures/DeparturesView.swift"],"validation":{"passed":true},"next_checkpoint_context":"iOS DeparturesView implemented: List with auto-refresh, DepartureRow UI, timer lifecycle managed","timestamp":"2025-11-14T20:20:00Z"}
