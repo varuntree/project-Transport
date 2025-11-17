@@ -1,0 +1,179 @@
+"""Trip service - fetch trip details with stop sequence.
+
+Queries pattern model (trips → patterns → pattern_stops → stops).
+Merges GTFS-RT trip_update from Redis for real-time arrival predictions.
+"""
+
+import gzip
+import json
+import time
+from typing import Dict, Optional
+
+from app.db.supabase_client import get_supabase
+from app.services.realtime_service import get_redis_binary, determine_mode
+from app.utils.logging import get_logger
+
+logger = get_logger(__name__)
+
+
+def get_trip_details(trip_id: str) -> dict:
+    """Get trip details with stop sequence and real-time arrivals.
+
+    Args:
+        trip_id: GTFS trip_id
+
+    Returns:
+        dict with fields:
+        - trip_id: str
+        - route: {short_name: str, color: str | None}
+        - headsign: str
+        - stops: List[{stop_id, stop_name, arrival_time_secs, platform?, wheelchair_accessible}]
+
+    Raises:
+        Exception if trip not found or query fails
+    """
+    start_time = time.time()
+
+    try:
+        supabase = get_supabase()
+        redis_binary = get_redis_binary()
+
+        # Step 1: Query trip metadata + pattern
+        trip_query = f"""
+        SELECT
+            t.trip_id,
+            t.trip_headsign,
+            t.pattern_id,
+            t.wheelchair_accessible AS trip_wheelchair_accessible,
+            r.route_id,
+            r.route_short_name,
+            r.route_color
+        FROM trips t
+        JOIN routes r ON t.route_id = r.route_id
+        WHERE t.trip_id = '{trip_id}'
+        LIMIT 1
+        """
+
+        trip_result = supabase.rpc("exec_raw_sql", {"query": trip_query}).execute()
+        trip_data = trip_result.data
+
+        if not trip_data or len(trip_data) == 0:
+            raise ValueError(f"Trip {trip_id} not found")
+
+        trip = trip_data[0]
+        pattern_id = trip['pattern_id']
+        route_id = trip['route_id']
+
+        # Step 2: Query pattern_stops → stops for stop sequence
+        pattern_query = f"""
+        SELECT
+            ps.stop_sequence,
+            ps.stop_id,
+            ps.arrival_offset_secs,
+            s.stop_name,
+            s.wheelchair_boarding
+        FROM pattern_stops ps
+        JOIN stops s ON ps.stop_id = s.stop_id
+        WHERE ps.pattern_id = {pattern_id}
+        ORDER BY ps.stop_sequence ASC
+        """
+
+        pattern_result = supabase.rpc("exec_raw_sql", {"query": pattern_query}).execute()
+        pattern_stops = pattern_result.data or []
+
+        if not pattern_stops:
+            logger.warning("trip_no_pattern_stops", trip_id=trip_id, pattern_id=pattern_id)
+            # Return trip with empty stops
+            return {
+                'trip_id': trip_id,
+                'route': {
+                    'short_name': trip['route_short_name'],
+                    'color': trip.get('route_color')
+                },
+                'headsign': trip['trip_headsign'] or '',
+                'stops': []
+            }
+
+        # Step 3: Fetch Redis RT trip_update for arrival predictions + platform
+        mode = determine_mode(route_id)
+        trip_platforms: Dict[str, str] = {}  # {stop_id: platform_code}
+        trip_delays: Dict[str, int] = {}  # {stop_id: delay_s}
+
+        try:
+            redis_key = f'tu:{mode}:v1'
+            blob = redis_binary.get(redis_key)
+
+            if blob:
+                # Decompress gzipped JSON blob
+                decompressed = gzip.decompress(blob)
+                data = json.loads(decompressed)
+
+                # Find this trip's trip_update
+                for tu in data:
+                    if tu.get('trip_id') == trip_id:
+                        # Extract stop-level arrivals + platforms
+                        stop_time_updates = tu.get('stop_time_updates', [])
+                        for stu in stop_time_updates:
+                            stop_id = stu.get('stop_id')
+                            if stop_id:
+                                # Store platform if available
+                                if stu.get('platform_code'):
+                                    trip_platforms[stop_id] = stu['platform_code']
+                                # Store delay if available
+                                if stu.get('delay_s') is not None:
+                                    trip_delays[stop_id] = stu['delay_s']
+                        break
+
+                logger.debug("trip_realtime_data_fetched", trip_id=trip_id, mode=mode, platforms_count=len(trip_platforms))
+            else:
+                logger.debug("trip_realtime_data_miss", trip_id=trip_id, mode=mode)
+
+        except gzip.BadGzipFile:
+            logger.warning("trip_realtime_gzip_error", trip_id=trip_id, mode=mode)
+        except json.JSONDecodeError as exc:
+            logger.warning("trip_realtime_json_error", trip_id=trip_id, mode=mode, error=str(exc))
+        except Exception as exc:
+            logger.warning("trip_realtime_fetch_failed", trip_id=trip_id, mode=mode, error=str(exc))
+
+        # Step 4: Build stops list with real-time data merged
+        stops = []
+        for ps in pattern_stops:
+            stop_id = ps['stop_id']
+            arrival_secs = ps['arrival_offset_secs']
+            delay_s = trip_delays.get(stop_id, 0)
+            realtime_arrival_secs = arrival_secs + delay_s
+
+            stops.append({
+                'stop_id': stop_id,
+                'stop_name': ps['stop_name'],
+                'arrival_time_secs': realtime_arrival_secs,
+                'platform': trip_platforms.get(stop_id),
+                'wheelchair_accessible': ps.get('wheelchair_boarding', 0)
+            })
+
+        duration_ms = int((time.time() - start_time) * 1000)
+        logger.info("trip_details_fetched",
+                   trip_id=trip_id,
+                   stops_count=len(stops),
+                   duration_ms=duration_ms)
+
+        return {
+            'trip_id': trip_id,
+            'route': {
+                'short_name': trip['route_short_name'],
+                'color': trip.get('route_color')
+            },
+            'headsign': trip['trip_headsign'] or '',
+            'stops': stops
+        }
+
+    except ValueError:
+        # Trip not found - re-raise
+        raise
+    except Exception as exc:
+        duration_ms = int((time.time() - start_time) * 1000)
+        logger.error("trip_details_failed",
+                    trip_id=trip_id,
+                    error=str(exc),
+                    duration_ms=duration_ms)
+        raise
