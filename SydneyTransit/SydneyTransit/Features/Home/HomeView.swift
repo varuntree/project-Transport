@@ -12,7 +12,7 @@ struct HomeView: View {
                     .font(.largeTitle)
                     .fontWeight(.bold)
 
-                Text("Phase 0: Foundation")
+                Text("Phase 2: Real-time Departures")
                     .font(.title3)
                     .foregroundColor(.secondary)
 

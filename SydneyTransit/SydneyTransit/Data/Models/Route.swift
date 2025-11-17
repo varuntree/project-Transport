@@ -6,8 +6,8 @@ struct Route: Codable, FetchableRecord, Identifiable {
     var id: Int { rid }
 
     let rid: Int
-    let routeShortName: String
-    let routeLongName: String
+    let routeShortName: String?
+    let routeLongName: String?
     let routeType: Int
     let routeColor: String?
     let routeTextColor: String?
@@ -24,6 +24,15 @@ struct Route: Codable, FetchableRecord, Identifiable {
     // Route type enum
     var type: RouteType {
         return RouteType(rawValue: routeType) ?? .unknown
+    }
+
+    // Display name (fallback for NULL names)
+    var displayName: String {
+        return routeShortName ?? routeLongName ?? "Unknown Route"
+    }
+
+    var displayLongName: String {
+        return routeLongName ?? routeShortName ?? "Unknown Route"
     }
 
     // Fetch all routes

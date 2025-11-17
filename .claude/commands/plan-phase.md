@@ -2,11 +2,56 @@
 
 Create checkpoint-driven implementation plan through exploration, research, and strategic design. Uses subagents to compress context and maintain focus.
 
+## Usage
+
+**For phase planning:**
+```
+/plan-phase 2
+/plan-phase 0
+```
+Creates plan for specified phase from oracle/phases/PHASE_N_*.md
+
+**For custom/ad-hoc planning:**
+```
+/plan-phase "celery alert matcher fixes"
+/plan-phase route-caching optimization
+/plan-phase "iOS route list performance"
+```
+Creates plan for intermediary work not covered in phase specs
+
 ## Variables
 
-phase_number: $1
+phase_or_description: $1
+additional_context: $2 (optional)
 
 ## Instructions
+
+**SETUP: Determine Plan Type**
+
+Detect if $1 is phase number or custom plan:
+
+```
+If $1 matches pattern "^\d+$" (e.g., "0", "2", "5"):
+  - Plan type: PHASE
+  - Phase number: $1
+  - Plan name: "phase-{$1}"
+  - Output: specs/phase-{$1}-implementation-plan.md
+  - Logs: .phase-logs/phase-{$1}/
+
+Else:
+  - Plan type: CUSTOM
+  - Plan name: sanitized($1) (lowercase, hyphens, no spaces)
+  - Description: "$1 $2" (combined args)
+  - Output: specs/{plan_name}-plan.md
+  - Logs: .phase-logs/{plan_name}/
+```
+
+**Detection Examples:**
+- `/plan-phase 2` → PHASE (reads oracle/phases/PHASE_2_*.md)
+- `/plan-phase "celery alert matcher fixes"` → CUSTOM (explores codebase for celery/alert)
+- `/plan-phase route-caching optimization` → CUSTOM (searches for route caching code)
+
+---
 
 **IMPORTANT: Think hard. Activate reasoning mode for all planning decisions.**
 
@@ -18,13 +63,18 @@ phase_number: $1
 
 **Create logging folder:**
 ```bash
+# PHASE plan:
 mkdir -p .phase-logs/phase-{phase_number}
+
+# CUSTOM plan:
+mkdir -p .phase-logs/{plan_name}
 ```
 
 ### 1.1 Deploy Deep Exploration Subagent
 
 Launch comprehensive exploration subagent to read ALL documentation and produce structured reference:
 
+**For PHASE plans:**
 ```
 Task tool:
 - subagent_type: "Explore"
@@ -55,6 +105,8 @@ Read these documents:
 
 Return structured JSON (save to .phase-logs/phase-{phase_number}/exploration-report.json):
 {
+  \"plan_type\": \"PHASE\",
+  \"phase_number\": {phase_number},
   \"phase_summary\": \"3-sentence overview of phase goals\",
   \"key_decisions\": [
     {
@@ -116,6 +168,118 @@ echo '<subagent_json_output>' > .phase-logs/phase-{phase_number}/exploration-rep
 
 ---
 
+**For CUSTOM plans:**
+```
+Task tool:
+- subagent_type: "Explore"
+- model: "sonnet"
+- description: "Deep exploration for {plan_name}"
+- prompt: "
+Your task: Read all relevant documentation for custom plan '{description}' and produce a structured JSON reference report.
+
+Thoroughness: medium (focus on relevant areas only)
+
+PLAN CONTEXT:
+- Plan name: {plan_name}
+- Description: {description}
+- Purpose: Ad-hoc planning for intermediary work not covered in phase specs
+
+Read these documents:
+1. oracle/DEVELOPMENT_STANDARDS.md (coding patterns - always)
+2. Relevant architecture specs based on plan description:
+   - oracle/specs/SYSTEM_OVERVIEW.md (if unclear what plan touches)
+   - oracle/specs/DATA_ARCHITECTURE.md (if mentions: GTFS, database, caching, Redis)
+   - oracle/specs/BACKEND_SPECIFICATION.md (if mentions: API, Celery, tasks, backend)
+   - oracle/specs/IOS_APP_SPECIFICATION.md (if mentions: iOS, Swift, UI, app)
+   - oracle/specs/INTEGRATION_CONTRACTS.md (if mentions: API contracts, auth, APNs)
+3. Current implementation state:
+   - git status
+   - git log --oneline -20 (recent commits for context)
+   - Search codebase for files related to plan description:
+     * grep -r '<keywords from description>' backend/ SydneyTransit/ --files-with-matches
+     * ls -la relevant directories
+4. Existing phase artifacts (if relevant):
+   - .phase-logs/phase-*/exploration-report.json (check recent phases)
+   - specs/phase-*-implementation-plan.md (check if related work was planned)
+
+ANALYSIS FOCUS:
+- What does plan description ask to solve?
+- What existing code/systems are affected?
+- What architecture specs/patterns apply?
+- What's missing from current implementation?
+- What are the constraints (technical, cost, performance)?
+
+Return structured JSON (save to .phase-logs/{plan_name}/exploration-report.json):
+{
+  \"plan_type\": \"CUSTOM\",
+  \"plan_name\": \"{plan_name}\",
+  \"description\": \"{description}\",
+  \"context_summary\": \"3-sentence overview: what problem this solves, current state, why needed\",
+  \"affected_systems\": [
+    {
+      \"system\": \"System name (e.g., Celery alert matcher, iOS route cache)\",
+      \"current_state\": \"What exists today\",
+      \"gap\": \"What's missing or broken\",
+      \"files_affected\": [\"path/to/file1.py\", \"path/to/file2.swift\"]
+    }
+  ],
+  \"key_decisions\": [
+    {
+      \"decision\": \"Technical decision name\",
+      \"rationale\": \"Why this approach\",
+      \"reference\": \"FILE.md:LINE_RANGE or Section number\",
+      \"critical_constraint\": \"Must-follow rule\"
+    }
+  ],
+  \"checkpoints\": [
+    {
+      \"name\": \"Checkpoint 1 name\",
+      \"goal\": \"Specific success criteria\",
+      \"backend_work\": [\"Task 1\", \"Task 2\"] or [],
+      \"ios_work\": [\"Task 1\", \"Task 2\"] or [],
+      \"validation\": \"Command or test to verify\"
+    }
+  ],
+  \"critical_patterns\": [
+    {
+      \"pattern\": \"Pattern name (e.g., Singleton DB client)\",
+      \"example_location\": \"backend/app/db/supabase_client.py:L10-25\",
+      \"reference\": \"DEVELOPMENT_STANDARDS.md:Section 2\"
+    }
+  ],
+  \"ios_research_needed\": [
+    \"Topic 1\", \"Topic 2\" or []
+  ],
+  \"external_services_research\": [
+    \"Service pattern 1\", \"Service pattern 2\" or []
+  ],
+  \"user_blockers\": [
+    \"Blocker 1\" or []
+  ],
+  \"acceptance_criteria\": [
+    \"Custom criterion 1 (derived from plan description)\",
+    \"Custom criterion 2\"
+  ],
+  \"related_phases\": [
+    {
+      \"phase\": \"Phase 2\",
+      \"relation\": \"This fixes bugs introduced in Phase 2 GTFS-RT polling\"
+    }
+  ]
+}
+
+Token budget: Return concise JSON (~2000 tokens max). Main planner will reference this throughout.
+"
+```
+
+**Save exploration output:**
+```bash
+# Subagent will return JSON - save it
+echo '<subagent_json_output>' > .phase-logs/{plan_name}/exploration-report.json
+```
+
+---
+
 ## Stage 2: Mandatory iOS Research (If Applicable)
 
 **CRITICAL: iOS training data gaps require upfront research. Do NOT skip.**
@@ -130,18 +294,20 @@ Launch general-purpose subagent to research ALL iOS topics and produce concise f
 Task tool:
 - subagent_type: "general-purpose"
 - model: "sonnet"
-- description: "iOS documentation research for Phase {phase_number}"
+- description: "iOS documentation research for {plan_name or Phase phase_number}"
 - prompt: "
-Your task: Research iOS topics for Phase {phase_number} using Apple Documentation (SOSUMI MCP tools) and produce concise research files.
+Your task: Research iOS topics for {plan_name or Phase phase_number} using Apple Documentation (SOSUMI MCP tools) and produce concise research files.
 
 CONTEXT:
 1. **Exploration Report:**
-   Read .phase-logs/phase-{phase_number}/exploration-report.json
+   Read .phase-logs/{plan_folder}/exploration-report.json
+   (plan_folder = phase-{phase_number} for PHASE plans, {plan_name} for CUSTOM plans)
    - Focus on `ios_research_needed` array (topics requiring research)
    - Reference `checkpoints` to understand where iOS patterns will be used
 
-2. **Phase Specification:**
-   Read oracle/phases/PHASE_{phase_number}_*.md
+2. **Specification:**
+   For PHASE plans: Read oracle/phases/PHASE_{phase_number}_*.md
+   For CUSTOM plans: Use exploration report context_summary and affected_systems
    - Understand iOS implementation requirements
    - Identify specific iOS frameworks/APIs needed
 
@@ -158,7 +324,7 @@ For each topic in `ios_research_needed` array:
    - Extract: Key patterns, code examples, API signatures, gotchas
 
 3. **Create Concise Research File:**
-   Save to: .phase-logs/phase-{phase_number}/ios-research-<topic-slug>.md
+   Save to: .phase-logs/{plan_folder}/ios-research-<topic-slug>.md
 
    Format:
    ```markdown
@@ -186,7 +352,7 @@ For each topic in `ios_research_needed` array:
    - Apple docs: <URL or path>
    - Related APIs: <List if relevant>
 
-   ## Relevance to Phase {phase_number}
+   ## Relevance to Plan
    <1-2 sentences explaining where this will be used in checkpoints>
    ```
 
@@ -210,14 +376,14 @@ Common topics you may encounter:
 VALIDATION:
 - Each research file must have: Key Pattern, Code Example, Critical Constraints, Common Gotchas, API Reference
 - Code examples must compile (check Swift syntax)
-- All files saved to .phase-logs/phase-{phase_number}/
+- All files saved to .phase-logs/{plan_folder}/
 
 RETURN FORMAT (JSON):
 {
   \"topics_researched\": [
     {
       \"topic\": \"SwiftUI refreshable modifier\",
-      \"file\": \".phase-logs/phase-{phase_number}/ios-research-swiftui-refreshable.md\",
+      \"file\": \".phase-logs/{plan_folder}/ios-research-swiftui-refreshable.md\",
       \"key_finding\": \"1-sentence summary of critical pattern\",
       \"apple_docs_url\": \"https://developer.apple.com/documentation/...\"
     }
@@ -238,7 +404,7 @@ DO NOT:
 
 **Save research summary:**
 ```bash
-echo '<subagent_json_output>' > .phase-logs/phase-{phase_number}/ios-research-summary.json
+echo '<subagent_json_output>' > .phase-logs/{plan_folder}/ios-research-summary.json
 ```
 
 ---
@@ -265,7 +431,9 @@ Review exploration report and identify ambiguities:
 
 ## Stage 4: Create Checkpoint-Driven Plan
 
-**Plan File:** `specs/phase-{phase_number}-implementation-plan.md`
+**Plan File:**
+- PHASE plans: `specs/phase-{phase_number}-implementation-plan.md`
+- CUSTOM plans: `specs/{plan_name}-plan.md`
 
 **Guidelines:**
 - Use checkpoints (not step-by-step instructions)
@@ -276,6 +444,7 @@ Review exploration report and identify ambiguities:
 
 ### Plan Template (Lightweight)
 
+**For PHASE plans:**
 ```markdown
 # Phase {phase_number} Implementation Plan
 
@@ -383,6 +552,136 @@ Attached: `.phase-logs/phase-{phase_number}/exploration-report.json`
 
 ---
 
+**For CUSTOM plans:**
+```markdown
+# {Plan Name} Implementation Plan
+
+**Type:** Custom Plan (Ad-hoc)
+**Context:** <From exploration report description>
+**Complexity:** <simple|medium|complex>
+
+---
+
+## Problem Statement
+
+<From exploration report context_summary>
+
+---
+
+## Affected Systems
+
+<From exploration report affected_systems array>
+
+**System: {system_name}**
+- Current state: <what exists>
+- Gap: <what's missing or broken>
+- Files affected: <list files>
+
+---
+
+## Key Technical Decisions
+
+<From exploration report key_decisions array>
+
+1. **Decision name**
+   - Rationale: <Why>
+   - Reference: <FILE:LINE or Section>
+   - Critical constraint: <Must-follow rule>
+
+---
+
+## Implementation Checkpoints
+
+### Checkpoint 1: <Name>
+
+**Goal:** <Specific success criteria>
+
+**Backend Work:**
+- <Task 1>
+- <Task 2>
+(or "N/A" if no backend work)
+
+**iOS Work:**
+- <Task 1>
+- <Task 2>
+(or "N/A" if no iOS work)
+
+**Design Constraints:**
+- Follow <REFERENCE> for <pattern>
+- Use <specific library/approach>
+- Must achieve <performance/size target>
+
+**Validation:**
+```bash
+<Command to verify checkpoint complete>
+# Expected: <Specific output>
+```
+
+**References:**
+- Pattern: <from exploration report critical_patterns>
+- Architecture: <spec file:section>
+- iOS Research: `.phase-logs/{plan_name}/ios-research-<topic>.md` (if applicable)
+
+---
+
+### Checkpoint 2: <Name>
+
+<Repeat format>
+
+---
+
+## Acceptance Criteria
+
+<From exploration report acceptance_criteria>
+
+- [ ] Criterion 1
+- [ ] Criterion 2
+- [ ] Criterion 3
+
+---
+
+## User Blockers (Complete Before Implementation)
+
+<From exploration report user_blockers>
+
+- [ ] Blocker 1
+(or "None")
+
+---
+
+## Research Notes
+
+**iOS Research Completed:**
+<List topics researched in Stage 2>
+(or "No iOS work")
+
+**On-Demand Research (During Implementation):**
+<From exploration report external_services_research>
+- Agent will research these when implementing relevant checkpoint
+- Confidence check: If <80% confident, agent MUST research
+
+---
+
+## Related Phases
+
+<From exploration report related_phases>
+
+**Phase {N}:** <relation explanation>
+
+---
+
+## Exploration Report
+
+Attached: `.phase-logs/{plan_name}/exploration-report.json`
+
+---
+
+**Plan Created:** <date>
+**Estimated Duration:** <X days/weeks>
+```
+
+---
+
 ## Stage 5: Validate Plan
 
 **Checklist:**
@@ -394,9 +693,15 @@ Attached: `.phase-logs/phase-{phase_number}/exploration-report.json`
 - [ ] Each checkpoint independently testable
 
 **Cross-check:**
+For PHASE plans:
 - Re-read `oracle/phases/PHASE_{phase_number}_*.md`
 - Ensure every deliverable from phase spec appears in checkpoints
 - Verify no scope creep (only what's in phase spec)
+
+For CUSTOM plans:
+- Verify all affected_systems from exploration report are addressed
+- Ensure checkpoints solve the problem statement
+- Verify no scope creep beyond description provided
 
 ---
 
@@ -404,6 +709,7 @@ Attached: `.phase-logs/phase-{phase_number}/exploration-report.json`
 
 Provide concise report:
 
+**For PHASE plans:**
 ```
 Plan Created: specs/phase-{phase_number}-implementation-plan.md
 
@@ -433,6 +739,39 @@ Ready for Implementation: Yes/No
 Next: Run /implement-phase {phase_number}
 ```
 
+**For CUSTOM plans:**
+```
+Plan Created: specs/{plan_name}-plan.md
+
+Summary:
+- Problem: <1-sentence problem statement>
+- Affected: <systems affected>
+- Key decision: <technical decision>
+- Complexity: <simple|medium|complex>
+
+Exploration:
+- Searched codebase for: <keywords>
+- Found: <N files affected>
+- Checkpoints: <N checkpoints defined>
+
+iOS Research:
+- <Topic 1> researched → .phase-logs/{plan_name}/ios-research-<topic>.md
+- <Or "No iOS work">
+
+Related Phases:
+- <Phase N>: <relation>
+- <Or "Independent work">
+
+User Blockers:
+- <Blocker 1>
+- <Or "None - ready to implement">
+
+Ready for Implementation: Yes/No
+<If No, explain what's missing>
+
+Next: Implement using plan as guide
+```
+
 ---
 
 ## Notes
@@ -447,3 +786,8 @@ Next: Run /implement-phase {phase_number}
 - Before: 10K+ tokens (full specs) → Main planner context
 - After: 2K tokens (exploration JSON) → Main planner context
 - Savings: ~80% context reduction while maintaining quality
+
+**Plan Types:**
+- PHASE plans: Structured phases from oracle/phases/*.md, full roadmap context
+- CUSTOM plans: Ad-hoc intermediary work, focused codebase exploration
+- Both use same checkpoint-driven approach, different exploration scope

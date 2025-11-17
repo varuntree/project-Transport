@@ -75,7 +75,11 @@ app.conf.update(
     beat_max_loop_interval=30,  # Poll for sub-minute schedules
 
     # Task discovery
-    include=["app.tasks.gtfs_rt_poller"],
+    include=[
+        "app.tasks.gtfs_rt_poller",
+        "app.tasks.alert_matcher",
+        "app.tasks.apns_worker",
+    ],
 )
 
 # Beat schedule (DST-safe cron times)
@@ -131,3 +135,8 @@ logger.info(
     queues=["critical", "normal", "batch"],
     timezone="Australia/Sydney",
 )
+
+# Import tasks to ensure registration (Celery 'include' alone may not be sufficient)
+from app.tasks import gtfs_rt_poller  # noqa: F401
+from app.tasks import alert_matcher  # noqa: F401
+from app.tasks import apns_worker  # noqa: F401

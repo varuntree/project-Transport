@@ -69,6 +69,11 @@ class APIClient {
     func request<T: Decodable>(_ endpoint: APIEndpoint) async throws -> T {
         let urlRequest = endpoint.request(baseURL: baseURL)
 
+        #if DEBUG
+        print("[APIClient] Request URL: \(urlRequest.url?.absoluteString ?? "nil")")
+        assert(!urlRequest.url!.absoluteString.contains("/api/v1/api/v1"), "Double /api/v1 prefix detected!")
+        #endif
+
         do {
             let (data, response) = try await session.data(for: urlRequest)
 

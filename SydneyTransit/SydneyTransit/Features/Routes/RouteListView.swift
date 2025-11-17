@@ -120,7 +120,7 @@ struct RouteRow: View {
                 .frame(width: 12, height: 12)
 
             // Route short name badge
-            Text(route.routeShortName)
+            Text(route.displayName)
                 .font(.caption)
                 .fontWeight(.bold)
                 .foregroundColor(.white)
@@ -131,7 +131,7 @@ struct RouteRow: View {
 
             // Route long name
             VStack(alignment: .leading, spacing: 2) {
-                Text(route.routeLongName)
+                Text(route.displayLongName)
                     .font(.subheadline)
                     .fontWeight(.medium)
                     .lineLimit(2)
