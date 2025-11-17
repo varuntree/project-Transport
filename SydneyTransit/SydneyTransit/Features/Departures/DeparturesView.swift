@@ -21,11 +21,14 @@ struct DeparturesView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
             } else {
                 ForEach(viewModel.departures) { departure in
-                    NavigationLink(destination: TripDetailsView(tripId: departure.tripId)) {
+                    NavigationLink(value: departure) {
                         DepartureRow(departure: departure)
                     }
                 }
             }
+        }
+        .navigationDestination(for: Departure.self) { departure in
+            TripDetailsView(tripId: departure.tripId)
         }
         .navigationTitle("Departures")
         .refreshable {
