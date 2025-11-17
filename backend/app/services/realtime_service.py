@@ -52,13 +52,14 @@ def determine_mode(route_id: str) -> str:
 
     Heuristic based on NSW GTFS route_id patterns:
     - T*, BMT* → sydneytrains
-    - M* → metro
-    - F* → ferries
-    - L* → lightrail
+    - M* (except MFF) → metro
+    - MFF → ferries (Manly Fast Ferry)
+    - F*, 9-F* → ferries
+    - L*, IWLR* → lightrail
     - else → buses
 
     Args:
-        route_id: GTFS route_id (e.g., "T1", "M20", "L1", "199", "F1")
+        route_id: GTFS route_id (e.g., "T1", "M20", "L1", "199", "F1", "MFF", "IWLR-191")
 
     Returns:
         Mode string for Redis key lookup (sydneytrains, metro, ferries, lightrail, buses)
@@ -68,13 +69,16 @@ def determine_mode(route_id: str) -> str:
 
     route_id_upper = route_id.upper()
 
-    if route_id_upper.startswith('T') or route_id_upper.startswith('BMT'):
-        return 'sydneytrains'
-    elif route_id_upper.startswith('M'):
-        return 'metro'
-    elif route_id_upper.startswith('F'):
+    # Check MFF before general M* check
+    if route_id_upper == 'MFF':
         return 'ferries'
-    elif route_id_upper.startswith('L'):
+    elif route_id_upper.startswith('T') or route_id_upper.startswith('BMT'):
+        return 'sydneytrains'
+    elif route_id_upper.startswith('M') or route_id_upper.startswith('SMNW'):
+        return 'metro'
+    elif route_id_upper.startswith('F') or route_id_upper.startswith('9-F'):
+        return 'ferries'
+    elif route_id_upper.startswith('L') or route_id_upper.startswith('IWLR'):
         return 'lightrail'
     else:
         return 'buses'
@@ -132,6 +136,10 @@ def get_realtime_departures(
         from datetime import datetime
         now_date = datetime.utcfromtimestamp(now_secs).strftime("%Y-%m-%d")
 
+        # Calculate seconds since midnight for time filtering
+        now_dt = datetime.utcfromtimestamp(now_secs)
+        time_secs = (now_dt.hour * 3600) + (now_dt.minute * 60) + now_dt.second
+
         query = f"""
         SELECT
             t.trip_id,
@@ -153,8 +161,9 @@ def get_realtime_departures(
         WHERE ps.stop_id = '{stop_id}'
           AND c.start_date <= '{now_date}'
           AND c.end_date >= '{now_date}'
+          AND ps.departure_offset_secs >= {time_secs}
         ORDER BY ps.departure_offset_secs ASC
-        LIMIT 100
+        LIMIT 20
         """
 
         result = supabase.rpc("exec_raw_sql", {"query": query}).execute()
