@@ -24,15 +24,31 @@ enum APIError: LocalizedError {
 }
 
 enum APIEndpoint {
-    case getDepartures(stopId: String)
+    case getDepartures(stopId: String, timeSecs: Int? = nil, direction: String = "future", limit: Int = 10)
     case getTrip(tripId: String)
 
     var path: String {
         switch self {
-        case .getDepartures(let stopId):
+        case .getDepartures(let stopId, _, _, _):
             return "/api/v1/stops/\(stopId)/departures"
         case .getTrip(let tripId):
             return "/api/v1/trips/\(tripId)"
+        }
+    }
+
+    var queryItems: [URLQueryItem]? {
+        switch self {
+        case .getDepartures(_, let timeSecs, let direction, let limit):
+            var items = [
+                URLQueryItem(name: "direction", value: direction),
+                URLQueryItem(name: "limit", value: "\(limit)")
+            ]
+            if let timeSecs = timeSecs {
+                items.append(URLQueryItem(name: "time", value: "\(timeSecs)"))
+            }
+            return items
+        case .getTrip:
+            return nil
         }
     }
 
@@ -44,7 +60,9 @@ enum APIEndpoint {
     }
 
     func request(baseURL: String) -> URLRequest {
-        let url = URL(string: baseURL + path)!
+        var components = URLComponents(string: baseURL + path)!
+        components.queryItems = queryItems
+        let url = components.url!
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

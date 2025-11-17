@@ -1,16 +1,46 @@
 import structlog
 import logging
 import sys
+from pathlib import Path
+from logging.handlers import RotatingFileHandler
 
 def configure_logging():
     """Configure structlog with JSON output for production"""
 
-    # Configure standard library logging first
-    logging.basicConfig(
-        format="%(message)s",
-        stream=sys.stdout,
-        level=logging.INFO,
+    # Create logs directory
+    log_dir = Path(__file__).parent.parent.parent / "logs"
+    log_dir.mkdir(exist_ok=True)
+
+    # Determine log file based on process type
+    import sys
+    if "celery" in sys.argv[0] or "celery" in " ".join(sys.argv):
+        if "beat" in sys.argv:
+            log_file = log_dir / "beat.log"
+        elif "-Q critical" in " ".join(sys.argv):
+            log_file = log_dir / "worker_critical.log"
+        else:
+            log_file = log_dir / "worker_service.log"
+    else:
+        log_file = log_dir / "fastapi.log"
+
+    # Configure standard library logging with both stdout and file handlers
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    root_logger.handlers = []  # Clear existing handlers
+
+    # Stdout handler
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setFormatter(logging.Formatter("%(message)s"))
+    root_logger.addHandler(stdout_handler)
+
+    # File handler with rotation (10MB max, 7 backups)
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=10 * 1024 * 1024,  # 10MB
+        backupCount=7
     )
+    file_handler.setFormatter(logging.Formatter("%(message)s"))
+    root_logger.addHandler(file_handler)
 
     # Configure structlog
     structlog.configure(

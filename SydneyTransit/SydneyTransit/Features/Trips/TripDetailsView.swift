@@ -1,5 +1,6 @@
 import SwiftUI
 import MapKit
+import Logging
 
 struct TripDetailsView: View {
     let tripId: String
@@ -7,11 +8,33 @@ struct TripDetailsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Show map if coordinates are available
-            if let trip = viewModel.trip, trip.stops.allSatisfy({ $0.lat != nil && $0.lon != nil }) {
-                TripMapView(stops: trip.stops)
-                    .frame(height: 200)
-                    .accessibilityLabel("Route Map")
+            // Show map if at least 2 stops have coordinates (graceful degradation)
+            if let trip = viewModel.trip {
+                let stopsWithCoords = trip.stops.filter { $0.lat != nil && $0.lon != nil }
+                if stopsWithCoords.count >= 2 {
+                    VStack(spacing: 0) {
+                        TripMapView(stops: stopsWithCoords)
+                            .frame(height: 200)
+                            .accessibilityLabel("Route Map")
+
+                        // Warning if partial route
+                        if stopsWithCoords.count < trip.stops.count {
+                            Text("Showing partial route (\(stopsWithCoords.count) of \(trip.stops.count) stops)")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                                .padding(.vertical, 4)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .background(Color.orange.opacity(0.1))
+                        }
+                    }
+                    .onAppear {
+                        Logger.app.debug("Map visibility", metadata: [
+                            "trip_id": "\(tripId)",
+                            "stops_count": "\(trip.stops.count)",
+                            "stops_with_coords": "\(stopsWithCoords.count)"
+                        ])
+                    }
+                }
             }
 
             List {

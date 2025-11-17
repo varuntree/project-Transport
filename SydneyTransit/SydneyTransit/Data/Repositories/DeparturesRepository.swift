@@ -1,8 +1,17 @@
 import Foundation
 import Logging
 
+struct DeparturesPage {
+    let departures: [Departure]
+    let earliestTimeSecs: Int?
+    let latestTimeSecs: Int?
+    let hasMorePast: Bool
+    let hasMoreFuture: Bool
+}
+
 protocol DeparturesRepository {
     func fetchDepartures(stopId: String) async throws -> [Departure]
+    func fetchDeparturesPage(stopId: String, timeSecs: Int?, direction: String, limit: Int) async throws -> DeparturesPage
 }
 
 class DeparturesRepositoryImpl: DeparturesRepository {
@@ -46,5 +55,48 @@ class DeparturesRepositoryImpl: DeparturesRepository {
 
         // Offline fallback: query bundled GRDB
         return try DatabaseManager.shared.getDepartures(stopId: stopId)
+    }
+
+    func fetchDeparturesPage(stopId: String, timeSecs: Int?, direction: String, limit: Int) async throws -> DeparturesPage {
+        struct PaginationMeta: Codable {
+            let hasMorePast: Bool?
+            let hasMoreFuture: Bool?
+            let earliestTimeSecs: Int?
+            let latestTimeSecs: Int?
+            let direction: String?
+
+            enum CodingKeys: String, CodingKey {
+                case hasMorePast = "has_more_past"
+                case hasMoreFuture = "has_more_future"
+                case earliestTimeSecs = "earliest_time_secs"
+                case latestTimeSecs = "latest_time_secs"
+                case direction
+            }
+        }
+
+        struct MetaData: Codable {
+            let pagination: PaginationMeta?
+        }
+
+        struct DeparturesData: Codable {
+            let departures: [Departure]
+            let count: Int
+        }
+
+        struct Response: Codable {
+            let data: DeparturesData
+            let meta: MetaData
+        }
+
+        let endpoint = APIEndpoint.getDepartures(stopId: stopId, timeSecs: timeSecs, direction: direction, limit: limit)
+        let response: Response = try await apiClient.request(endpoint)
+
+        return DeparturesPage(
+            departures: response.data.departures,
+            earliestTimeSecs: response.meta.pagination?.earliestTimeSecs,
+            latestTimeSecs: response.meta.pagination?.latestTimeSecs,
+            hasMorePast: response.meta.pagination?.hasMorePast ?? false,
+            hasMoreFuture: response.meta.pagination?.hasMoreFuture ?? false
+        )
     }
 }

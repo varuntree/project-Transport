@@ -1,69 +1,112 @@
 #!/bin/bash
-# Start all backend services and save PIDs for easy shutdown
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BACKEND_DIR="$(dirname "$SCRIPT_DIR")"
-PID_FILE="$SCRIPT_DIR/.service_pids"
+# Start all backend services (FastAPI + Celery workers + Beat)
+# Logs: backend/logs/*.log (separate file per service)
+# PIDs: backend/scripts/.service_pids/*.pid
+# Stop: ./scripts/stop_all.sh
+
+set -e
 
 # Change to backend directory
-cd "$BACKEND_DIR"
+cd "$(dirname "$0")/.."
 
-# Activate virtual environment
-if [ -d "venv" ]; then
+# Create directories
+mkdir -p scripts/.service_pids
+mkdir -p logs
+
+# Activate virtual environment if exists
+if [ -f "venv/bin/activate" ]; then
     source venv/bin/activate
-else
-    echo "Warning: venv not found. Make sure virtual environment is activated."
 fi
 
-# Clear any existing PID file
-> "$PID_FILE"
+# Function to check if service is already running
+check_running() {
+    local service_name=$1
+    local pid_file="scripts/.service_pids/${service_name}.pid"
+
+    if [ -f "$pid_file" ]; then
+        local pid=$(cat "$pid_file")
+        if kill -0 "$pid" 2>/dev/null; then
+            echo "$service_name already running (PID: $pid)"
+            return 0
+        else
+            rm -f "$pid_file"
+        fi
+    fi
+    return 1
+}
+
+# Check if any services are already running
+ALREADY_RUNNING=false
+for service in fastapi worker_critical worker_service beat; do
+    if check_running "$service"; then
+        ALREADY_RUNNING=true
+    fi
+done
+
+if [ "$ALREADY_RUNNING" = true ]; then
+    echo ""
+    echo "Stop existing services first with: ./scripts/stop_all.sh"
+    exit 1
+fi
 
 echo "Starting all backend services..."
-echo "PID file: $PID_FILE"
 echo ""
 
-# Start FastAPI server
-echo "Starting FastAPI server..."
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 > /tmp/sydney_transit_fastapi.log 2>&1 &
-FASTAPI_PID=$!
-echo "FastAPI PID: $FASTAPI_PID"
-echo "$FASTAPI_PID" >> "$PID_FILE"
-sleep 2
+# Start FastAPI
+echo "[1/4] Starting FastAPI..."
+nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 > /dev/null 2>&1 &
+echo $! > scripts/.service_pids/fastapi.pid
+echo "  ✓ FastAPI started (PID: $(cat scripts/.service_pids/fastapi.pid))"
+echo "    - API: http://localhost:8000"
+echo "    - Logs: logs/fastapi.log"
 
-# Start Celery Worker (Critical Queue)
-echo "Starting Celery Worker (Critical)..."
-celery -A app.tasks.celery_app worker -Q critical -c 1 --loglevel=info > /tmp/sydney_transit_celery_critical.log 2>&1 &
-CELERY_CRITICAL_PID=$!
-echo "Celery Critical PID: $CELERY_CRITICAL_PID"
-echo "$CELERY_CRITICAL_PID" >> "$PID_FILE"
 sleep 1
 
-# Start Celery Worker (Normal + Batch)
-echo "Starting Celery Worker (Normal + Batch)..."
-celery -A app.tasks.celery_app worker -Q normal,batch -c 2 --autoscale=3,1 --loglevel=info > /tmp/sydney_transit_celery_service.log 2>&1 &
-CELERY_SERVICE_PID=$!
-echo "Celery Service PID: $CELERY_SERVICE_PID"
-echo "$CELERY_SERVICE_PID" >> "$PID_FILE"
+# Start Celery Worker - Critical Queue
+echo ""
+echo "[2/4] Starting Celery Worker (Critical Queue)..."
+nohup celery -A app.tasks.celery_app worker -Q critical -c 1 --loglevel=info > /dev/null 2>&1 &
+echo $! > scripts/.service_pids/worker_critical.pid
+echo "  ✓ Critical worker started (PID: $(cat scripts/.service_pids/worker_critical.pid))"
+echo "    - Queue: critical (GTFS-RT polling every 30s)"
+echo "    - Logs: logs/worker_critical.log"
+
+sleep 1
+
+# Start Celery Worker - Normal + Batch Queues
+echo ""
+echo "[3/4] Starting Celery Worker (Normal + Batch Queues)..."
+nohup celery -A app.tasks.celery_app worker -Q normal,batch -c 2 --autoscale=3,1 --loglevel=info > /dev/null 2>&1 &
+echo $! > scripts/.service_pids/worker_service.pid
+echo "  ✓ Service worker started (PID: $(cat scripts/.service_pids/worker_service.pid))"
+echo "    - Queues: normal (alerts, APNs), batch (GTFS sync)"
+echo "    - Logs: logs/worker_service.log"
+
 sleep 1
 
 # Start Celery Beat
-echo "Starting Celery Beat..."
-celery -A app.tasks.celery_app beat --loglevel=info > /tmp/sydney_transit_celery_beat.log 2>&1 &
-CELERY_BEAT_PID=$!
-echo "Celery Beat PID: $CELERY_BEAT_PID"
-echo "$CELERY_BEAT_PID" >> "$PID_FILE"
+echo ""
+echo "[4/4] Starting Celery Beat (Scheduler)..."
+nohup celery -A app.tasks.celery_app beat --loglevel=info > /dev/null 2>&1 &
+echo $! > scripts/.service_pids/beat.pid
+echo "  ✓ Beat scheduler started (PID: $(cat scripts/.service_pids/beat.pid))"
+echo "    - Schedules: RT poll (30s), GTFS sync (03:10), alerts (2-5min)"
+echo "    - Logs: logs/beat.log"
 
 echo ""
-echo "=========================================="
-echo "All services started!"
-echo "=========================================="
-echo "FastAPI Server:     http://localhost:8000"
-echo "FastAPI Logs:       tail -f /tmp/sydney_transit_fastapi.log"
-echo "Celery Critical:    tail -f /tmp/sydney_transit_celery_critical.log"
-echo "Celery Service:     tail -f /tmp/sydney_transit_celery_service.log"
-echo "Celery Beat:        tail -f /tmp/sydney_transit_celery_beat.log"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "✓ All services started successfully!"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "To stop all services, run:"
-echo "  bash scripts/stop_all.sh"
-echo "=========================================="
-
+echo "Commands:"
+echo "  - Stop all:     ./scripts/stop_all.sh"
+echo "  - View logs:    ./scripts/logs.sh"
+echo "  - Health check: curl http://localhost:8000/health"
+echo ""
+echo "Log files:"
+echo "  - FastAPI:        logs/fastapi.log"
+echo "  - Worker (RT):    logs/worker_critical.log"
+echo "  - Worker (Svc):   logs/worker_service.log"
+echo "  - Beat:           logs/beat.log"
+echo ""

@@ -1,61 +1,75 @@
 #!/bin/bash
-# Stop all backend services using saved PIDs
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PID_FILE="$SCRIPT_DIR/.service_pids"
+# Stop all backend services gracefully
+# Reads PIDs from scripts/.service_pids/*.pid
+# Sends SIGTERM (graceful), waits 5s, then SIGKILL if needed
 
-if [ ! -f "$PID_FILE" ]; then
-    echo "No PID file found. Services may not be running or were started manually."
-    echo "Attempting to find and kill processes by name..."
-    
-    # Fallback: kill by process name
-    pkill -f "uvicorn app.main:app" 2>/dev/null
-    pkill -f "celery.*celery_app worker" 2>/dev/null
-    pkill -f "celery.*celery_app beat" 2>/dev/null
-    
-    echo "Done. Check if processes are still running with: ps aux | grep -E 'uvicorn|celery'"
+cd "$(dirname "$0")/.."
+
+PID_DIR="scripts/.service_pids"
+
+if [ ! -d "$PID_DIR" ] || [ -z "$(ls -A $PID_DIR 2>/dev/null)" ]; then
+    echo "No running services found"
     exit 0
 fi
 
-echo "Stopping all backend services..."
+echo "Stopping backend services..."
 echo ""
 
-# Read PIDs and kill each process
-KILLED_COUNT=0
-while IFS= read -r pid; do
-    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-        echo "Stopping process $pid..."
-        kill "$pid" 2>/dev/null
-        KILLED_COUNT=$((KILLED_COUNT + 1))
+# Function to stop a service
+stop_service() {
+    local pid_file=$1
+    local service_name=$(basename "$pid_file" .pid)
+
+    if [ ! -f "$pid_file" ]; then
+        return
     fi
-done < "$PID_FILE"
 
-# Wait a moment for graceful shutdown
-sleep 2
+    local pid=$(cat "$pid_file")
 
-# Force kill any remaining processes
-while IFS= read -r pid; do
-    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-        echo "Force killing process $pid..."
-        kill -9 "$pid" 2>/dev/null
+    # Check if process exists
+    if ! kill -0 "$pid" 2>/dev/null; then
+        echo "  $service_name (PID: $pid) - not running"
+        rm -f "$pid_file"
+        return
     fi
-done < "$PID_FILE"
 
-# Clean up PID file
-rm -f "$PID_FILE"
+    # Send SIGTERM for graceful shutdown
+    echo "  $service_name (PID: $pid) - stopping..."
+    kill -TERM "$pid" 2>/dev/null || true
+
+    # Wait up to 5 seconds for graceful shutdown
+    local count=0
+    while kill -0 "$pid" 2>/dev/null && [ $count -lt 50 ]; do
+        sleep 0.1
+        count=$((count + 1))
+    done
+
+    # Force kill if still running
+    if kill -0 "$pid" 2>/dev/null; then
+        echo "    ⚠ Process didn't stop gracefully, forcing..."
+        kill -KILL "$pid" 2>/dev/null || true
+        sleep 0.5
+    fi
+
+    # Verify stopped
+    if kill -0 "$pid" 2>/dev/null; then
+        echo "    ✗ Failed to stop $service_name"
+    else
+        echo "    ✓ Stopped"
+    fi
+
+    rm -f "$pid_file"
+}
+
+# Stop services in reverse order (Beat, Workers, FastAPI)
+# This ensures scheduled tasks don't queue after workers stop
+for service in beat worker_service worker_critical fastapi; do
+    pid_file="$PID_DIR/${service}.pid"
+    if [ -f "$pid_file" ]; then
+        stop_service "$pid_file"
+    fi
+done
 
 echo ""
-if [ $KILLED_COUNT -gt 0 ]; then
-    echo "Stopped $KILLED_COUNT service(s)."
-else
-    echo "No running services found."
-fi
-
-# Also clean up any orphaned processes by name (safety net)
-echo "Cleaning up any remaining processes..."
-pkill -f "uvicorn app.main:app" 2>/dev/null
-pkill -f "celery.*celery_app worker" 2>/dev/null
-pkill -f "celery.*celery_app beat" 2>/dev/null
-
-echo "Done!"
-
+echo "✓ All services stopped"

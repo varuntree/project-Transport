@@ -26,4 +26,6 @@ ENV/
 htmlcov/
 
 # Service management
-scripts/.service_pids
+scripts/.service_pids/
+logs/
+*.log

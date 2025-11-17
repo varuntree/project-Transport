@@ -76,7 +76,7 @@ def get_trip_details(trip_id: str) -> dict:
             s.wheelchair_boarding
         FROM pattern_stops ps
         JOIN stops s ON ps.stop_id = s.stop_id
-        WHERE ps.pattern_id = {pattern_id}
+        WHERE ps.pattern_id = '{pattern_id}'
         ORDER BY ps.stop_sequence ASC
         """
 
