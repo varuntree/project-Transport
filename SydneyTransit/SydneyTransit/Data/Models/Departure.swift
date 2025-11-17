@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 struct Departure: Codable, Identifiable, Hashable {
     let tripId: String
@@ -10,6 +11,7 @@ struct Departure: Codable, Identifiable, Hashable {
     let realtime: Bool
     let platform: String?
     let wheelchairAccessible: Int
+    let occupancy_status: Int?
 
     var id: String { tripId }
 
@@ -40,6 +42,24 @@ struct Departure: Codable, Identifiable, Hashable {
         return String(format: "%02d:%02d", hours, remainingMins)
     }
 
+    // Computed: occupancy icon (SF Symbol + color + accessibility label)
+    var occupancyIcon: (symbolName: String, color: Color, label: String)? {
+        guard let status = occupancy_status else { return nil }
+
+        switch status {
+        case 0...1:
+            return ("figure.stand", .green, "Low occupancy")
+        case 2:
+            return ("figure.stand.line.dotted.figure.stand", .yellow, "Moderate occupancy")
+        case 3...4:
+            return ("figure.stand.line.dotted.figure.stand", .orange, "High occupancy")
+        case 5...6:
+            return ("figure.stand.line.dotted.figure.stand", .red, "Very crowded")
+        default:
+            return nil
+        }
+    }
+
     enum CodingKeys: String, CodingKey {
         case tripId = "trip_id"
         case routeShortName = "route_short_name"
@@ -50,5 +70,6 @@ struct Departure: Codable, Identifiable, Hashable {
         case realtime
         case platform
         case wheelchairAccessible = "wheelchair_accessible"
+        case occupancy_status = "occupancy_status"
     }
 }

@@ -108,6 +108,14 @@ struct DepartureRow: View {
 
             Spacer()
 
+            // Occupancy icon (if available)
+            if let occupancy = departure.occupancyIcon {
+                Image(systemName: occupancy.symbolName)
+                    .foregroundColor(occupancy.color)
+                    .font(.body)
+                    .accessibilityLabel(occupancy.label)
+            }
+
             // Wheelchair icon (if accessible)
             if departure.wheelchairAccessible == 1 {
                 Image(systemName: "figure.roll")

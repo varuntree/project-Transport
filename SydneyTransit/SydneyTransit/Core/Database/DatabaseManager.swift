@@ -109,7 +109,8 @@ class DatabaseManager {
                     delayS: 0,
                     realtime: false,
                     platform: nil,
-                    wheelchairAccessible: 0
+                    wheelchairAccessible: 0,
+                    occupancy_status: nil
                 )
             }
         }
