@@ -23,12 +23,17 @@ struct Stop: Codable, FetchableRecord, Identifiable {
     // FTS5 search (sanitized)
     static func search(_ db: Database, query: String) throws -> [Stop] {
         // Sanitize query (remove FTS5 special chars)
-        let sanitized = query
+        let punctuation = CharacterSet.punctuationCharacters
+        let cleaned = query.unicodeScalars.map { scalar -> Character in
+            punctuation.contains(scalar) ? " " : Character(scalar)
+        }
+
+        let sanitized = String(cleaned)
             .replacingOccurrences(of: "\"", with: "")
             .replacingOccurrences(of: "*", with: "")
             .replacingOccurrences(of: " OR ", with: " ", options: .caseInsensitive)
             .replacingOccurrences(of: " AND ", with: " ", options: .caseInsensitive)
-            .trimmingCharacters(in: .whitespaces)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !sanitized.isEmpty else { return [] }
 

@@ -66,7 +66,7 @@ sleep 1
 # Start Celery Worker - Critical Queue
 echo ""
 echo "[2/4] Starting Celery Worker (Critical Queue)..."
-nohup celery -A app.tasks.celery_app worker -Q critical -c 1 --loglevel=info > /dev/null 2>&1 &
+nohup celery -A app.tasks.celery_app worker -Q critical --pool=solo --loglevel=info > /dev/null 2>&1 &
 echo $! > scripts/.service_pids/worker_critical.pid
 echo "  ✓ Critical worker started (PID: $(cat scripts/.service_pids/worker_critical.pid))"
 echo "    - Queue: critical (GTFS-RT polling every 30s)"
@@ -77,7 +77,7 @@ sleep 1
 # Start Celery Worker - Normal + Batch Queues
 echo ""
 echo "[3/4] Starting Celery Worker (Normal + Batch Queues)..."
-nohup celery -A app.tasks.celery_app worker -Q normal,batch -c 2 --autoscale=3,1 --loglevel=info > /dev/null 2>&1 &
+nohup celery -A app.tasks.celery_app worker -Q normal,batch --pool=solo --loglevel=info > /dev/null 2>&1 &
 echo $! > scripts/.service_pids/worker_service.pid
 echo "  ✓ Service worker started (PID: $(cat scripts/.service_pids/worker_service.pid))"
 echo "    - Queues: normal (alerts, APNs), batch (GTFS sync)"

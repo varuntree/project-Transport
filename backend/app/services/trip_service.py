@@ -29,6 +29,12 @@ def get_trip_details(trip_id: str) -> dict:
         - headsign: str
         - stops: List[{stop_id, stop_name, arrival_time_secs, platform?, wheelchair_accessible}]
 
+    Notes:
+        - arrival_time_secs is the **actual** arrival time in seconds since
+          midnight for the service day (including any real‑time delay), i.e.
+          `start_time_secs + arrival_offset_secs + delay_s`. This matches the
+          `actual_departure_secs` semantics used in the departures API.
+
     Raises:
         Exception if trip not found or query fails
     """
@@ -45,6 +51,7 @@ def get_trip_details(trip_id: str) -> dict:
             t.trip_headsign,
             t.pattern_id,
             t.wheelchair_accessible AS trip_wheelchair_accessible,
+            t.start_time_secs,
             r.route_id,
             r.route_short_name,
             r.route_color
@@ -63,6 +70,8 @@ def get_trip_details(trip_id: str) -> dict:
         trip = trip_data[0]
         pattern_id = trip['pattern_id']
         route_id = trip['route_id']
+        # start_time_secs can be NULL for some legacy rows; default to 0 in that case.
+        trip_start_secs = trip.get('start_time_secs') or 0
 
         # Step 2: Query pattern_stops → stops for stop sequence
         pattern_query = f"""
@@ -141,7 +150,12 @@ def get_trip_details(trip_id: str) -> dict:
         stops = []
         for ps in pattern_stops:
             stop_id = ps['stop_id']
-            arrival_secs = ps['arrival_offset_secs']
+            # Convert offset from trip start into an absolute time-of-day
+            # so iOS can format it as HH:mm, consistent with departures list.
+            #
+            # Schema guarantee: arrival_offset_secs is "seconds from trip start_time"
+            # (see schemas/migrations/001_initial_schema.sql).
+            arrival_secs = trip_start_secs + ps['arrival_offset_secs']
             delay_s = trip_delays.get(stop_id, 0)
             realtime_arrival_secs = arrival_secs + delay_s
 
@@ -153,6 +167,16 @@ def get_trip_details(trip_id: str) -> dict:
             if stop_lat == 0.0 or stop_lon == 0.0:
                 logger.warning("stop_coordinates_missing", stop_id=stop_id, trip_id=trip_id)
 
+            has_coords = stop_lat != 0.0 and stop_lon != 0.0
+            logger.debug(
+                "trip_stop_coords",
+                trip_id=trip_id,
+                stop_id=stop_id,
+                lat=stop_lat,
+                lon=stop_lon,
+                has_coords=has_coords
+            )
+
             stops.append({
                 'stop_id': stop_id,
                 'stop_name': ps['stop_name'],
@@ -163,11 +187,21 @@ def get_trip_details(trip_id: str) -> dict:
                 'wheelchair_accessible': ps.get('wheelchair_boarding', 0)
             })
 
+        stops_with_coords = sum(1 for s in stops if s['lat'] and s['lon'])
         duration_ms = int((time.time() - start_time) * 1000)
-        logger.info("trip_details_fetched",
-                   trip_id=trip_id,
-                   stops_count=len(stops),
-                   duration_ms=duration_ms)
+        logger.info(
+            "trip_details_fetched",
+            trip_id=trip_id,
+            stops_count=len(stops),
+            duration_ms=duration_ms
+        )
+        logger.info(
+            "trip_coords_summary",
+            trip_id=trip_id,
+            total_stops=len(stops),
+            stops_with_coords=stops_with_coords,
+            duration_ms=duration_ms
+        )
 
         return {
             'trip_id': trip_id,

@@ -1,15 +1,55 @@
 import SwiftUI
 import Logging
 
+private struct ScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private struct OccupancyIconView: View {
+    let occupancy: (symbolName: String, color: Color, label: String)
+    let departure: Departure
+
+    init(occupancy: (symbolName: String, color: Color, label: String), departure: Departure) {
+        self.occupancy = occupancy
+        self.departure = departure
+        Logger.app.debug("Occupancy check", metadata: [
+            "trip_id": "\(departure.tripId)",
+            "occupancy_status": "\(departure.occupancy_status?.description ?? "nil")"
+        ])
+    }
+
+    var body: some View {
+        Image(systemName: occupancy.symbolName)
+            .foregroundColor(occupancy.color)
+            .font(.body)
+            .accessibilityLabel(occupancy.label)
+    }
+}
+
 struct DeparturesView: View {
     let stop: Stop
     @StateObject private var viewModel = DeparturesViewModel()
     @State private var stopId: String?
     @State private var lastTopSentinelTrigger: Date?
     @State private var hasLoadedInitial = false  // Track if initial load complete
+    @State private var hasScrolledDown = false
 
     var body: some View {
         ScrollView {
+            GeometryReader { proxy in
+                Color.clear
+                    .frame(height: 0)
+                    .preference(
+                        key: ScrollOffsetPreferenceKey.self,
+                        value: proxy.frame(in: .named("departuresScroll")).minY
+                    )
+            }
+            .frame(height: 0)
+
             LazyVStack(spacing: 0) {
                 if viewModel.isLoading && viewModel.departures.isEmpty {
                     ProgressView("Loading departures...")
@@ -32,11 +72,12 @@ struct DeparturesView: View {
                         ProgressView()
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
-                    } else if hasLoadedInitial {
+                    } else if hasLoadedInitial && viewModel.hasMorePast {
                         // Only show sentinel after initial load (prevents auto-trigger)
                         Color.clear
                             .frame(height: 1)
                             .onAppear {
+                                guard hasScrolledDown else { return }
                                 // Debounce sentinel triggers during scroll bounce
                                 // Prevents race condition where multiple loadPastDepartures() execute in parallel
                                 let now = Date()
@@ -46,6 +87,7 @@ struct DeparturesView: View {
                                     return
                                 }
                                 lastTopSentinelTrigger = now
+                                hasScrolledDown = false
 
                                 Task {
                                     await viewModel.loadPastDepartures()
@@ -56,7 +98,7 @@ struct DeparturesView: View {
                     // Departures list
                     ForEach(viewModel.departures) { departure in
                         VStack(spacing: 0) {
-                            NavigationLink(value: departure) {
+                            NavigationLink(destination: TripDetailsView(tripId: departure.tripId)) {
                                 DepartureRow(departure: departure)
                             }
                             .padding(.horizontal)
@@ -71,7 +113,7 @@ struct DeparturesView: View {
                         ProgressView()
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
-                    } else {
+                    } else if viewModel.hasMoreFuture {
                         Color.clear
                             .frame(height: 1)
                             .onAppear {
@@ -81,6 +123,12 @@ struct DeparturesView: View {
                             }
                     }
                 }
+            }
+        }
+        .coordinateSpace(name: "departuresScroll")
+        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
+            if value < -10 {
+                hasScrolledDown = true
             }
         }
         .navigationTitle("Departures")
@@ -126,8 +174,8 @@ struct DepartureRow: View {
     var body: some View {
         HStack(spacing: 12) {
             // Minutes countdown (large, highlighted) + time subscript
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(departure.minutesUntil) min")
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(departure.minutesUntilText)
                     .font(.title2)
                     .fontWeight(.semibold)
                     .foregroundColor(.primary)
@@ -173,10 +221,7 @@ struct DepartureRow: View {
 
             // Occupancy icon (if available)
             if let occupancy = departure.occupancyIcon {
-                Image(systemName: occupancy.symbolName)
-                    .foregroundColor(occupancy.color)
-                    .font(.body)
-                    .accessibilityLabel(occupancy.label)
+                OccupancyIconView(occupancy: occupancy, departure: departure)
             }
 
             // Wheelchair icon (if accessible)

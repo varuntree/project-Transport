@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 @MainActor
 class DeparturesViewModel: ObservableObject {
@@ -10,8 +11,8 @@ class DeparturesViewModel: ObservableObject {
 
     private var earliestTimeSecs: Int?
     private var latestTimeSecs: Int?
-    private var hasMorePast = true
-    private var hasMoreFuture = true
+    @Published private(set) var hasMorePast = true
+    @Published private(set) var hasMoreFuture = true
     private var loadedDepartureIds = Set<String>()  // Deduplication by full ID (tripId_scheduledTime)
 
     private let repository: DeparturesRepository

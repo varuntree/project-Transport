@@ -340,10 +340,22 @@ def _validate_load(parsed_data: Dict[str, List[Dict]], loaded_counts: Dict[str, 
         stops_response = supabase.table("stops").select("*", count="exact").execute()
         db_stops_count = stops_response.count
 
-        if db_stops_count != loaded_counts.get("stops", 0):
-            issue = f"DB stops count mismatch: {db_stops_count} vs {loaded_counts.get('stops', 0)}"
+        expected_stops = loaded_counts.get("stops", 0)
+        if db_stops_count < expected_stops:
+            issue = f"DB stops count too low: {db_stops_count} < {expected_stops}"
             issues.append(issue)
-            logger.error("gtfs_validation_db_count_mismatch", db_count=db_stops_count, expected=loaded_counts.get("stops", 0))
+            logger.error(
+                "gtfs_validation_db_count_too_low",
+                db_count=db_stops_count,
+                expected=expected_stops
+            )
+        elif db_stops_count != expected_stops:
+            # Allow extra rows (e.g. pre-existing data) but log a warning for skew.
+            logger.warning(
+                "gtfs_validation_db_count_skew",
+                db_count=db_stops_count,
+                expected=expected_stops
+            )
     except Exception as e:
         issue = f"Failed to query stops count: {str(e)}"
         issues.append(issue)
@@ -380,6 +392,73 @@ def _validate_load(parsed_data: Dict[str, List[Dict]], loaded_counts: Dict[str, 
         issues.append(issue)
         logger.error("gtfs_validation_threshold_failed", check="min_routes", actual=loaded_counts.get("routes", 0), threshold=min_routes)
 
+    # Check 5: Mode coverage (ensure at least one route for each important mode)
+    try:
+        # NSW uses extended route types; define groups by mode rather than a single code.
+        # Query each mode group directly to avoid pagination issues.
+        mode_checks = [
+            ("rail", [2]),
+            ("bus", [3, 700, 712, 714]),
+            ("ferry", [4]),
+            ("light_rail", [0, 900]),
+            ("metro", [1, 401]),
+        ]
+
+        def require_any(types: list, label: str) -> None:
+            # Check if any route exists with one of the expected types
+            for route_type in types:
+                count_response = supabase.table("routes").select("route_id", count="exact").eq("route_type", route_type).limit(1).execute()
+                if count_response.count > 0:
+                    logger.info(f"gtfs_validation_mode_found", mode=label, route_type=route_type, count=count_response.count)
+                    return
+
+            # If we get here, no routes found for any of the types
+            issue = f"Missing routes for expected mode {label} (types {sorted(types)})"
+            issues.append(issue)
+            logger.error(
+                "gtfs_validation_mode_coverage_failed",
+                mode=label,
+                expected_types=types
+            )
+
+        for label, types in mode_checks:
+            require_any(types, label)
+    except Exception as e:
+        issue = f"Failed to verify mode coverage: {str(e)}"
+        issues.append(issue)
+        logger.error("gtfs_validation_mode_coverage_error", error=str(e))
+
+    # Check 6: Critical stop whitelist (must-exist stops)
+    critical_stops = [
+        # Names/IDs are based on NSW GTFS; update if feed naming changes.
+        {"stop_id": None, "stop_name": "Central Station"},
+        {"stop_id": None, "stop_name": "Central Grand Concourse Light Rail"},
+        {"stop_id": None, "stop_name": "Central Station, Platform 26"},
+        {"stop_id": None, "stop_name": "Davistown, Central RSL Wharf"},
+    ]
+
+    try:
+        for cs in critical_stops:
+            stop_query = supabase.table("stops").select("stop_id, stop_name")
+            if cs["stop_id"]:
+                stop_query = stop_query.eq("stop_id", cs["stop_id"])
+            else:
+                stop_query = stop_query.eq("stop_name", cs["stop_name"])
+
+            result = stop_query.execute()
+            if not result.data:
+                issue = f"Critical stop missing: {cs['stop_name']} ({cs['stop_id'] or 'no explicit stop_id'})"
+                issues.append(issue)
+                logger.error(
+                    "gtfs_validation_critical_stop_missing",
+                    stop_name=cs["stop_name"],
+                    stop_id=cs["stop_id"]
+                )
+    except Exception as e:
+        issue = f"Failed to verify critical stops: {str(e)}"
+        issues.append(issue)
+        logger.error("gtfs_validation_critical_stops_error", error=str(e))
+
     # Determine pass/fail
     passed = len(issues) == 0
 
@@ -388,12 +467,12 @@ def _validate_load(parsed_data: Dict[str, List[Dict]], loaded_counts: Dict[str, 
         logger.error("gtfs_validation_failed", total_issues=len(issues), issues=issues)
         raise ValueError(error_msg)
 
-    logger.info("gtfs_validation_passed", checks_passed=4)
+    logger.info("gtfs_validation_passed", checks_passed=6)
 
     return {
         "passed": passed,
         "issues": issues,
-        "checks_run": 4,
+        "checks_run": 6,
         "null_locations": 0,
         "db_stops_count": db_stops_count if 'db_stops_count' in locals() else loaded_counts.get("stops", 0)
     }

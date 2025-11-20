@@ -1,12 +1,14 @@
 """NSW API GTFS downloader service.
 
-Downloads GTFS ZIP files from NSW Transport API for 6 modes:
-- Sydney Trains (v2 realtime-aligned)
-- Metro
+Downloads GTFS ZIP files from NSW Transport API for multiple modes:
+- Sydney Trains (realtime-aligned static)
+- Metro (realtime-aligned static)
 - Buses
 - Sydney Ferries
 - Manly Fast Ferry (MFF)
 - Light Rail
+- Complete NSW bundle (coverage)
+- Additional coverage feeds (all ferries, NSW TrainLink, region buses)
 
 Handles rate limiting (5 req/s limit), ZIP validation, and structured logging.
 """
@@ -17,6 +19,7 @@ import zipfile
 from pathlib import Path
 from typing import Dict, List
 import requests
+from requests import HTTPError
 
 from app.config import settings
 from app.utils.logging import get_logger
@@ -24,15 +27,31 @@ from app.utils.logging import get_logger
 logger = get_logger(__name__)
 
 # NSW API base URL and endpoints (validated 2025-11-13)
-# Note: sydneytrains uses v1 (v2 returns 404), metro uses v2
+# Note: endpoint set combines realtime-aligned static feeds with coverage feeds.
 NSW_API_BASE = "https://api.transport.nsw.gov.au"
 GTFS_ENDPOINTS = {
+    # Realtime-aligned static feeds (pattern model + GTFS-RT alignment)
+    # Note: v2 schedule endpoint for sydneytrains returns 404; use v1 (tested 2025-11-18)
     "sydneytrains": "/v1/gtfs/schedule/sydneytrains",
     "metro": "/v2/gtfs/schedule/metro",
     "buses": "/v1/gtfs/schedule/buses",
     "sydneyferries": "/v1/gtfs/schedule/ferries/sydneyferries",
     "mff": "/v1/gtfs/schedule/ferries/MFF",
     "lightrail": "/v1/gtfs/schedule/lightrail",
+    # Coverage feeds (may include operators not covered by the above)
+    # Used primarily to ensure complete stop coverage (e.g. additional ferry wharves).
+    "complete": "/v1/publictransport/timetables/complete/gtfs",
+    # Note: top-level ferries endpoint currently returns 404 and is treated as optional.
+    "ferries_all": "/v1/gtfs/schedule/ferries",
+    "nswtrains": "/v1/gtfs/schedule/nswtrains",
+    "regionbuses": "/v1/gtfs/schedule/regionbuses",
+}
+
+# Coverage-only modes that are allowed to 404 without aborting the entire pipeline.
+OPTIONAL_COVERAGE_MODES = {
+    "ferries_all",
+    "nswtrains",
+    "regionbuses",
 }
 
 # Rate limiting: NSW API limit is 5 req/s, use 250ms delay = 4 req/s (safe margin)
@@ -108,6 +127,24 @@ def download_gtfs_feeds(output_dir: str = "temp/gtfs-downloads") -> Dict[str, st
             if mode != list(GTFS_ENDPOINTS.keys())[-1]:
                 time.sleep(DELAY_BETWEEN_REQUESTS)
 
+        except HTTPError as e:
+            status = e.response.status_code if e.response is not None else None
+            if status == 404 and mode in OPTIONAL_COVERAGE_MODES:
+                # Optional coverage feed not available; log and continue.
+                logger.warning(
+                    "gtfs_optional_coverage_feed_missing",
+                    mode=mode,
+                    endpoint=endpoint,
+                    status_code=status
+                )
+                continue
+            logger.error(
+                "gtfs_download_failed",
+                mode=mode,
+                error=str(e),
+                error_type=type(e).__name__
+            )
+            raise
         except Exception as e:
             logger.error(
                 "gtfs_download_failed",

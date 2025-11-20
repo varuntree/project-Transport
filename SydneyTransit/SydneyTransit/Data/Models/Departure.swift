@@ -18,14 +18,31 @@ struct Departure: Codable, Identifiable, Hashable {
 
     // Computed: minutes until departure (from now)
     var minutesUntil: Int {
+        let secsRemaining = realtimeTimeSecs - currentSydneySecondsSinceMidnight
+        return max(0, secsRemaining / 60)
+    }
+
+    // Computed: user-facing countdown text
+    var minutesUntilText: String {
+        let secsRemaining = realtimeTimeSecs - currentSydneySecondsSinceMidnight
+        if secsRemaining < -59 {
+            let minsAgo = (abs(secsRemaining) + 30) / 60
+            return "\(minsAgo) min ago"
+        } else if secsRemaining < 0 {
+            return "Now"
+        } else {
+            let mins = max(1, Int(ceil(Double(secsRemaining) / 60.0)))
+            return "\(mins) min"
+        }
+    }
+
+    private var currentSydneySecondsSinceMidnight: Int {
         let sydney = TimeZone(identifier: "Australia/Sydney")!
         let now = Date()
         var calendar = Calendar.current
         calendar.timeZone = sydney
         let midnight = calendar.startOfDay(for: now)
-        let secsSinceMidnight = Int(now.timeIntervalSince(midnight))
-        let secsRemaining = realtimeTimeSecs - secsSinceMidnight
-        return max(0, secsRemaining / 60)
+        return Int(now.timeIntervalSince(midnight))
     }
 
     // Computed: delay text ('+X min' if delayed, nil otherwise)
@@ -72,5 +89,65 @@ struct Departure: Codable, Identifiable, Hashable {
         case platform
         case wheelchairAccessible = "wheelchair_accessible"
         case occupancy_status = "occupancy_status"
+    }
+
+    // Memberwise initializer used by offline GRDB fallback (DatabaseManager).
+    init(
+        tripId: String,
+        routeShortName: String,
+        headsign: String,
+        scheduledTimeSecs: Int,
+        realtimeTimeSecs: Int,
+        delayS: Int,
+        realtime: Bool,
+        platform: String?,
+        wheelchairAccessible: Int,
+        occupancy_status: Int?
+    ) {
+        self.tripId = tripId
+        self.routeShortName = routeShortName
+        self.headsign = headsign
+        self.scheduledTimeSecs = scheduledTimeSecs
+        self.realtimeTimeSecs = realtimeTimeSecs
+        self.delayS = delayS
+        self.realtime = realtime
+        self.platform = platform
+        self.wheelchairAccessible = wheelchairAccessible
+        self.occupancy_status = occupancy_status
+    }
+
+    // Custom decoding to be resilient to missing or null fields from the backend.
+    // This prevents user-visible "Failed to decode response: The data could not be read because it is missing"
+    // errors when some departures omit optional fields.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        // Required identifiers – fall back to empty strings if missing so UI can still render a row
+        tripId = try container.decodeIfPresent(String.self, forKey: .tripId) ?? ""
+        routeShortName = try container.decodeIfPresent(String.self, forKey: .routeShortName) ?? ""
+        headsign = try container.decodeIfPresent(String.self, forKey: .headsign) ?? ""
+
+        // Times and delay – if any field is missing, fall back to safe defaults
+        let scheduled = try container.decodeIfPresent(Int.self, forKey: .scheduledTimeSecs) ?? 0
+        scheduledTimeSecs = scheduled
+
+        // realtime_time_secs may be omitted for purely static data; default to scheduled time
+        realtimeTimeSecs = try container.decodeIfPresent(Int.self, forKey: .realtimeTimeSecs) ?? scheduled
+
+        delayS = try container.decodeIfPresent(Int.self, forKey: .delayS) ?? 0
+        realtime = try container.decodeIfPresent(Bool.self, forKey: .realtime) ?? (delayS != 0)
+
+        // Platform can occasionally come back as either a string or an integer code; normalise to String?
+        if let platformString = try container.decodeIfPresent(String.self, forKey: .platform) {
+            platform = platformString
+        } else if let platformInt = try? container.decodeIfPresent(Int.self, forKey: .platform) {
+            // Normalise numeric platform codes to their string representation
+            platform = String(platformInt)
+        } else {
+            platform = nil
+        }
+
+        wheelchairAccessible = try container.decodeIfPresent(Int.self, forKey: .wheelchairAccessible) ?? 0
+        occupancy_status = try container.decodeIfPresent(Int.self, forKey: .occupancy_status)
     }
 }

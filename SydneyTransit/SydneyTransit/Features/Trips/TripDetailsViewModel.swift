@@ -1,4 +1,5 @@
 import Foundation
+import Logging
 
 @MainActor
 class TripDetailsViewModel: ObservableObject {
@@ -18,6 +19,14 @@ class TripDetailsViewModel: ObservableObject {
 
         do {
             trip = try await repository.fetchTrip(id: id)
+            if let trip {
+                let stopsWithCoords = trip.stops.filter { $0.lat != nil && $0.lon != nil }.count
+                Logger.app.debug("Map visibility", metadata: [
+                    "trip_id": "\(trip.tripId)",
+                    "stops_count": "\(trip.stops.count)",
+                    "stops_with_coords": "\(stopsWithCoords)"
+                ])
+            }
         } catch let error as URLError where error.code == .notConnectedToInternet {
             errorMessage = "No internet connection"
         } catch let error as APIError {

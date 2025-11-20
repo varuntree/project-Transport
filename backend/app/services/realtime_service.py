@@ -217,12 +217,27 @@ def get_realtime_departures(
                 # Fetch VehiclePositions for occupancy
                 vp_key = f'vp:{mode}:v1'
                 vp_blob = redis_binary.get(vp_key)
+                logger.debug(
+                    "vp_blob_check",
+                    mode=mode,
+                    blob_exists=vp_blob is not None,
+                    blob_size=len(vp_blob) if vp_blob else 0
+                )
 
                 if vp_blob:
                     decompressed = gzip.decompress(vp_blob)
                     vp_data = json.loads(decompressed)
 
                     # Extract occupancy_status from vehicle positions
+                    if vp_data:
+                        sample = vp_data[0]
+                        logger.debug(
+                            "vp_sample",
+                            mode=mode,
+                            trip_id=sample.get('trip_id'),
+                            occupancy_status=sample.get('occupancy_status')
+                        )
+
                     for vp in vp_data:
                         trip_id = vp.get('trip_id')
                         occupancy_status = vp.get('occupancy_status')

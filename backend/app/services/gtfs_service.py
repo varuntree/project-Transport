@@ -1,10 +1,11 @@
 """GTFS parser and pattern model extractor.
 
-Parses NSW GTFS feeds (6 modes) into pattern model for Supabase storage.
+Parses NSW GTFS feeds into a pattern model for Supabase storage.
 Pattern model: Group trips by identical stop sequences, factor out offsets.
 
 Key operations:
-- Merge 6 mode directories into single dataset
+- Merge realtime-aligned mode directories into a single dataset for pattern extraction
+- Optionally merge additional coverage feeds for stop/route coverage
 - Sydney bbox filtering: lat [-34.5, -33.3], lon [150.5, 151.5]
 - Pattern extraction: trips with same stop_sequence → pattern_id
 - Offset calculation: median arrival/departure offset from trip start
@@ -28,7 +29,7 @@ SYDNEY_BBOX = {
     "lon_max": 151.5
 }
 
-# Expected mode directories from checkpoint 1
+# Expected mode directories for realtime‑aligned pattern model
 MODE_DIRS = [
     "sydneytrains",
     "metro",
@@ -36,6 +37,15 @@ MODE_DIRS = [
     "sydneyferries",
     "mff",
     "lightrail"
+]
+
+# Additional coverage feeds that may contain stops/routes beyond the realtime‑aligned feeds.
+# These are used primarily to improve stop coverage (e.g. extra ferry wharves, regional services).
+COVERAGE_EXTRA_DIRS = [
+    "complete",
+    "ferries_all",
+    "nswtrains",
+    "regionbuses",
 ]
 
 # Required GTFS files
@@ -104,13 +114,15 @@ def parse_gtfs(gtfs_base_dir: str) -> Dict:
 
 
 def _load_and_merge_feeds(base_path: Path) -> Dict:
-    """Load GTFS CSV files from all mode directories and merge.
+    """Load GTFS CSV files from mode directories and merge.
 
     Args:
         base_path: Base directory with mode subdirectories
 
     Returns:
         Dict with merged DataFrames: agencies, stops, routes, trips, stop_times, calendar, calendar_dates
+        (Trips/stop_times are based on realtime‑aligned feeds; coverage feeds currently
+        contribute only to agencies/stops/routes.)
     """
     all_agencies = []
     all_stops = []
@@ -172,18 +184,74 @@ def _load_and_merge_feeds(base_path: Path) -> Dict:
             logger.error("gtfs_mode_load_failed", mode=mode, error=str(e), error_type=type(e).__name__)
             raise
 
-    # Merge all modes
-    merged = {
-        "agencies": pd.concat(all_agencies, ignore_index=True),
-        "stops": pd.concat(all_stops, ignore_index=True),
-        "routes": pd.concat(all_routes, ignore_index=True),
-        "trips": pd.concat(all_trips, ignore_index=True),
-        "stop_times": pd.concat(all_stop_times, ignore_index=True),
-        "calendar": pd.concat(all_calendar, ignore_index=True)
-    }
+    if not all_agencies or not all_stops or not all_routes or not all_trips or not all_stop_times:
+        logger.error("gtfs_merge_no_pattern_data")
+        raise ValueError("No pattern-mode GTFS data loaded; check MODE_DIRS downloads")
+
+    # Merge realtime‑aligned pattern feeds
+    agencies_df = pd.concat(all_agencies, ignore_index=True)
+    stops_df = pd.concat(all_stops, ignore_index=True)
+    routes_df = pd.concat(all_routes, ignore_index=True)
+    trips_df = pd.concat(all_trips, ignore_index=True)
+    stop_times_df = pd.concat(all_stop_times, ignore_index=True)
+    calendar_df = pd.concat(all_calendar, ignore_index=True)
 
     if all_calendar_dates:
-        merged["calendar_dates"] = pd.concat(all_calendar_dates, ignore_index=True)
+        calendar_dates_df = pd.concat(all_calendar_dates, ignore_index=True)
+    else:
+        calendar_dates_df = None
+
+    # Best-effort: merge additional coverage feeds for agencies/stops/routes only.
+    extra_agencies = []
+    extra_stops = []
+    extra_routes = []
+
+    for coverage_mode in COVERAGE_EXTRA_DIRS:
+        mode_path = base_path / coverage_mode
+        if not mode_path.exists():
+            continue
+
+        try:
+            agencies_path = mode_path / "agency.txt"
+            stops_path = mode_path / "stops.txt"
+            routes_path = mode_path / "routes.txt"
+
+            if agencies_path.exists():
+                extra_agencies.append(pd.read_csv(agencies_path, dtype=str))
+            if stops_path.exists():
+                extra_stops.append(pd.read_csv(stops_path, dtype=str))
+            if routes_path.exists():
+                extra_routes.append(pd.read_csv(routes_path, dtype=str))
+
+            logger.info(
+                "gtfs_coverage_mode_loaded",
+                mode=coverage_mode,
+                has_agencies=agencies_path.exists(),
+                has_stops=stops_path.exists(),
+                has_routes=routes_path.exists()
+            )
+        except Exception as e:
+            # Coverage feeds are best-effort; log and continue rather than failing entire parse.
+            logger.error("gtfs_coverage_mode_load_failed", mode=coverage_mode, error=str(e), error_type=type(e).__name__)
+
+    if extra_agencies:
+        agencies_df = pd.concat([agencies_df] + extra_agencies, ignore_index=True)
+    if extra_stops:
+        stops_df = pd.concat([stops_df] + extra_stops, ignore_index=True)
+    if extra_routes:
+        routes_df = pd.concat([routes_df] + extra_routes, ignore_index=True)
+
+    merged = {
+        "agencies": agencies_df,
+        "stops": stops_df,
+        "routes": routes_df,
+        "trips": trips_df,
+        "stop_times": stop_times_df,
+        "calendar": calendar_df,
+    }
+
+    if calendar_dates_df is not None:
+        merged["calendar_dates"] = calendar_dates_df
 
     logger.info(
         "gtfs_merge_complete",
@@ -269,11 +337,23 @@ def _apply_sydney_filter(data: Dict) -> Dict:
     if deduplicated_count > 0:
         logger.info("stops_deduplicated", duplicates_removed=deduplicated_count)
 
+    # Deduplicate agencies (agencies appear across multiple feeds and coverage feeds)
+    agencies_dedup = data["agencies"].drop_duplicates(subset=["agency_id"], keep="first")
+    agencies_dup_count = len(data["agencies"]) - len(agencies_dedup)
+    if agencies_dup_count > 0:
+        logger.info("agencies_deduplicated", duplicates_removed=agencies_dup_count)
+
+    # Deduplicate routes (routes may appear in multiple feeds and coverage feeds)
+    sydney_routes_dedup = sydney_routes.drop_duplicates(subset=["route_id"], keep="first")
+    routes_dup_count = len(sydney_routes) - len(sydney_routes_dedup)
+    if routes_dup_count > 0:
+        logger.info("routes_deduplicated", duplicates_removed=routes_dup_count)
+
     # Convert to list of dicts for easier Supabase insertion
     result = {
-        "agencies": data["agencies"].to_dict("records"),
+        "agencies": agencies_dedup.to_dict("records"),
         "stops": sydney_stops_dedup.to_dict("records"),
-        "routes": sydney_routes.to_dict("records"),
+        "routes": sydney_routes_dedup.to_dict("records"),
         "trips": sydney_trips,  # Keep as DataFrame for pattern extraction
         "stop_times": sydney_stop_times,  # Keep as DataFrame
         "calendar": sydney_calendar.to_dict("records"),

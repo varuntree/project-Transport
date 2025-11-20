@@ -76,9 +76,13 @@ python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env  # Fill in Supabase, Redis, NSW API keys
 
-# Run
+# Run (use scripts for production-like setup)
+./backend/scripts/start_all.sh  # Starts FastAPI + Celery workers + Beat
+./backend/scripts/stop_all.sh   # Stops all services
+
+# Or run manually:
 cd /Users/varunprasad/code/prjs/prj_transport/backend && source venv/bin/activate && uvicorn app.main:app --reload  # http://localhost:8000
-cd /Users/varunprasad/code/prjs/prj_transport/backend && source venv/bin/activate && celery -A app.tasks.celery_app worker -Q critical,normal,batch --loglevel=info
+cd /Users/varunprasad/code/prjs/prj_transport/backend && source venv/bin/activate && celery -A app.tasks.celery_app worker -Q critical,normal,batch --pool=solo --loglevel=info  # macOS requires --pool=solo
 cd /Users/varunprasad/code/prjs/prj_transport/backend && source venv/bin/activate && celery -A app.tasks.celery_app beat --loglevel=info
 
 # Test

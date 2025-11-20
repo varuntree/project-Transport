@@ -255,6 +255,17 @@ async def get_departures(
             limit=limit
         )
 
+        if departures:
+            occupancy_count = sum(1 for d in departures if d.get('occupancy_status') is not None)
+            sample = departures[0]
+            logger.debug(
+                "departure_occupancy",
+                stop_id=stop_id,
+                trip_id=sample['trip_id'],
+                occupancy_status=sample.get('occupancy_status'),
+                occupancy_sample_count=occupancy_count
+            )
+
         # Count realtime vs static
         realtime_count = sum(1 for d in departures if d['realtime'])
         static_count = len(departures) - realtime_count
