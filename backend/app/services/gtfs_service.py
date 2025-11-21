@@ -330,12 +330,36 @@ def _apply_sydney_filter(data: Dict) -> Dict:
         trips_after=len(sydney_trips)
     )
 
-    # Deduplicate stops (some stops appear in multiple mode feeds)
-    # Keep first occurrence (based on order: trains, metro, buses, ferries, lightrail)
-    sydney_stops_dedup = sydney_stops.drop_duplicates(subset=["stop_id"], keep="first")
-    deduplicated_count = len(sydney_stops) - len(sydney_stops_dedup)
-    if deduplicated_count > 0:
-        logger.info("stops_deduplicated", duplicates_removed=deduplicated_count)
+    # Smart deduplication: Preserve stop hierarchy
+    # Only deduplicate parent stations (location_type=1), keep ALL child platforms and orphans
+    # Rationale: Child stops (location_type=0) are unique physical locations. NSW Light Rail has
+    # orphaned platforms (parent_station=NULL) due to data quality issues - must preserve these.
+
+    # Handle empty string '' as NULL for parent_station (NSW GTFS inconsistency)
+    sydney_stops['parent_station'] = sydney_stops['parent_station'].replace('', None)
+
+    # Categorize stops by hierarchy role
+    parent_stations = sydney_stops[sydney_stops['location_type'] == '1']
+    child_stops = sydney_stops[(sydney_stops['location_type'] == '0') & sydney_stops['parent_station'].notna()]
+    orphan_stops = sydney_stops[(sydney_stops['location_type'] == '0') & sydney_stops['parent_station'].isna()]
+    other_stops = sydney_stops[~sydney_stops['location_type'].isin(['0', '1'])]
+
+    # Deduplicate ONLY parent stations (generic stations appear in multiple feeds)
+    parent_stations_dedup = parent_stations.drop_duplicates(subset=['stop_id'], keep='first')
+
+    # Merge: deduped parents + ALL children/orphans/other
+    sydney_stops_dedup = pd.concat([parent_stations_dedup, child_stops, orphan_stops, other_stops], ignore_index=True)
+
+    logger.info(
+        "stops_smart_deduplication",
+        stops_before=len(sydney_stops),
+        stops_after=len(sydney_stops_dedup),
+        parent_stations_before=len(parent_stations),
+        parent_stations_after=len(parent_stations_dedup),
+        child_stops=len(child_stops),
+        orphan_stops=len(orphan_stops),
+        other_stops=len(other_stops)
+    )
 
     # Deduplicate agencies (agencies appear across multiple feeds and coverage feeds)
     agencies_dedup = data["agencies"].drop_duplicates(subset=["agency_id"], keep="first")
