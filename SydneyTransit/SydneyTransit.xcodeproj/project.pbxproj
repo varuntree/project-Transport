@@ -7,18 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		4A68F7B3CEA94FAFAB8D68B9 /* SydneyTransit/Features/Departures/DeparturesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DEF813EDD13476B8B426268 /* SydneyTransit/Features/Departures/DeparturesView.swift */; };
+		9AB37B18786D41F2A8697290 /* SydneyTransit/Features/Departures/DeparturesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C7D78E67F5740468A80CF2B /* SydneyTransit/Features/Departures/DeparturesViewModel.swift */; };
 		AA0000000000000000000001 /* SydneyTransitApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000001 /* SydneyTransitApp.swift */; };
-		4A68F7B3CEA94FAFAB8D68B9 /* DeparturesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DEF813EDD13476B8B426268 /* DeparturesView.swift */; };
-		9AB37B18786D41F2A8697290 /* DeparturesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C7D78E67F5740468A80CF2B /* DeparturesViewModel.swift */; };
-
-		AA9681CF92837B4080BBDDBC5C /* Departure.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBCC5D28B94F9A439E88B893B4 /* Departure.swift */; };
-		AA7F0987B75C6D400FB700E787 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB8136FFA1D3144240813D3791 /* APIClient.swift */; };
-		AA5E5CE0F7F4B34FB996AA004E /* DeparturesRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB678CA7FD585847ED8EF997FE /* DeparturesRepository.swift */; };
-		AA1A2B3C4D5E6F7A8B9C0D1E2F /* TripDetailsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F7A8B9C0D1E2F /* TripDetailsView.swift */; };
-		AA2B3C4D5E6F7A8B9C0D1E2F3A /* TripDetailsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B3C4D5E6F7A8B9C0D1E2F3A /* TripDetailsViewModel.swift */; };
-		AA5E6F7A8B9C0D1E2F3A4B5C6D /* TripMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E6F7A8B9C0D1E2F3A4B5C6D /* TripMapView.swift */; };
-		AA3C4D5E6F7A8B9C0D1E2F3A4B /* Trip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C4D5E6F7A8B9C0D1E2F3A4B /* Trip.swift */; };
-		AA4D5E6F7A8B9C0D1E2F3A4B5C /* TripRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D5E6F7A8B9C0D1E2F3A4B5C /* TripRepository.swift */; };
 		AA0000000000000000000002 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000002 /* Assets.xcassets */; };
 		AA0000000000000000000003 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000003 /* Constants.swift */; };
 		AA0000000000000000000004 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000004 /* Logger.swift */; };
@@ -32,24 +23,34 @@
 		AA0000000000000000000012 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000012 /* SearchView.swift */; };
 		AA0000000000000000000013 /* StopDetailsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000013 /* StopDetailsView.swift */; };
 		AA0000000000000000000014 /* RouteListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000014 /* RouteListView.swift */; };
+		AA1A2B3C4D5E6F7A8B9C0D1E2F /* SydneyTransit/Features/Trips/TripDetailsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F7A8B9C0D1E2F /* SydneyTransit/Features/Trips/TripDetailsView.swift */; };
+		AA2B3C4D5E6F7A8B9C0D1E2F3A /* SydneyTransit/Features/Trips/TripDetailsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B3C4D5E6F7A8B9C0D1E2F3A /* SydneyTransit/Features/Trips/TripDetailsViewModel.swift */; };
+		AA3C4D5E6F7A8B9C0D1E2F3A4B /* SydneyTransit/Data/Models/Trip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C4D5E6F7A8B9C0D1E2F3A4B /* SydneyTransit/Data/Models/Trip.swift */; };
+		AA4D5E6F7A8B9C0D1E2F3A4B5C /* SydneyTransit/Data/Repositories/TripRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D5E6F7A8B9C0D1E2F3A4B5C /* SydneyTransit/Data/Repositories/TripRepository.swift */; };
+		AA5E5CE0F7F4B34FB996AA004E /* SydneyTransit/Data/Repositories/DeparturesRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB678CA7FD585847ED8EF997FE /* SydneyTransit/Data/Repositories/DeparturesRepository.swift */; };
+		AA5E6F7A8B9C0D1E2F3A4B5C6D /* SydneyTransit/Features/Trips/TripMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E6F7A8B9C0D1E2F3A4B5C6D /* SydneyTransit/Features/Trips/TripMapView.swift */; };
+		AA7F0987B75C6D400FB700E787 /* SydneyTransit/Core/Network/APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB8136FFA1D3144240813D3791 /* SydneyTransit/Core/Network/APIClient.swift */; };
+		AA9681CF92837B4080BBDDBC5C /* SydneyTransit/Data/Models/Departure.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBCC5D28B94F9A439E88B893B4 /* SydneyTransit/Data/Models/Departure.swift */; };
+		CF92F96B2ED050420048E013 /* StopAnnotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF92F9632ED050420048E013 /* StopAnnotation.swift */; };
+		CF92F96C2ED050420048E013 /* StopDetailsDrawer.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF92F9652ED050420048E013 /* StopDetailsDrawer.swift */; };
+		CF92F96D2ED050420048E013 /* MapCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF92F9672ED050420048E013 /* MapCoordinator.swift */; };
+		CF92F96E2ED050420048E013 /* MapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF92F9682ED050420048E013 /* MapView.swift */; };
+		CF92F96F2ED050420048E013 /* StopAnnotationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF92F9642ED050420048E013 /* StopAnnotationView.swift */; };
+		CF92F9702ED050420048E013 /* MapViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF92F9692ED050420048E013 /* MapViewModel.swift */; };
 		PP0000000000000000000001 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = QQ0000000000000000000001 /* Supabase */; };
 		PP0000000000000000000002 /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = QQ0000000000000000000002 /* Logging */; };
 		PP0000000000000000000003 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = QQ0000000000000000000003 /* GRDB */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		0DEF813EDD13476B8B426268 /* SydneyTransit/Features/Departures/DeparturesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SydneyTransit/Features/Departures/DeparturesView.swift; sourceTree = "<group>"; };
+		1A2B3C4D5E6F7A8B9C0D1E2F /* SydneyTransit/Features/Trips/TripDetailsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SydneyTransit/Features/Trips/TripDetailsView.swift; sourceTree = "<group>"; };
+		2B3C4D5E6F7A8B9C0D1E2F3A /* SydneyTransit/Features/Trips/TripDetailsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SydneyTransit/Features/Trips/TripDetailsViewModel.swift; sourceTree = "<group>"; };
+		3C4D5E6F7A8B9C0D1E2F3A4B /* SydneyTransit/Data/Models/Trip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SydneyTransit/Data/Models/Trip.swift; sourceTree = "<group>"; };
+		4D5E6F7A8B9C0D1E2F3A4B5C /* SydneyTransit/Data/Repositories/TripRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SydneyTransit/Data/Repositories/TripRepository.swift; sourceTree = "<group>"; };
+		5C7D78E67F5740468A80CF2B /* SydneyTransit/Features/Departures/DeparturesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SydneyTransit/Features/Departures/DeparturesViewModel.swift; sourceTree = "<group>"; };
+		5E6F7A8B9C0D1E2F3A4B5C6D /* SydneyTransit/Features/Trips/TripMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SydneyTransit/Features/Trips/TripMapView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000001 /* SydneyTransitApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SydneyTransitApp.swift; sourceTree = "<group>"; };
-		0DEF813EDD13476B8B426268 /* DeparturesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SydneyTransit/Features/Departures/DeparturesView.swift"; sourceTree = "<group>"; };
-		5C7D78E67F5740468A80CF2B /* DeparturesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SydneyTransit/Features/Departures/DeparturesViewModel.swift"; sourceTree = "<group>"; };
-
-		BBCC5D28B94F9A439E88B893B4 /* Departure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SydneyTransit/Data/Models/Departure.swift"; sourceTree = "<group>"; };
-		BB8136FFA1D3144240813D3791 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SydneyTransit/Core/Network/APIClient.swift"; sourceTree = "<group>"; };
-		BB678CA7FD585847ED8EF997FE /* DeparturesRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SydneyTransit/Data/Repositories/DeparturesRepository.swift"; sourceTree = "<group>"; };
-		1A2B3C4D5E6F7A8B9C0D1E2F /* TripDetailsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SydneyTransit/Features/Trips/TripDetailsView.swift"; sourceTree = "<group>"; };
-		2B3C4D5E6F7A8B9C0D1E2F3A /* TripDetailsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SydneyTransit/Features/Trips/TripDetailsViewModel.swift"; sourceTree = "<group>"; };
-		5E6F7A8B9C0D1E2F3A4B5C6D /* TripMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SydneyTransit/Features/Trips/TripMapView.swift"; sourceTree = "<group>"; };
-		3C4D5E6F7A8B9C0D1E2F3A4B /* Trip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SydneyTransit/Data/Models/Trip.swift"; sourceTree = "<group>"; };
-		4D5E6F7A8B9C0D1E2F3A4B5C /* TripRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SydneyTransit/Data/Repositories/TripRepository.swift"; sourceTree = "<group>"; };
 		BB0000000000000000000002 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		BB0000000000000000000003 /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
 		BB0000000000000000000004 /* Logger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logger.swift; sourceTree = "<group>"; };
@@ -63,7 +64,16 @@
 		BB0000000000000000000012 /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000013 /* StopDetailsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StopDetailsView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000014 /* RouteListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteListView.swift; sourceTree = "<group>"; };
+		BB678CA7FD585847ED8EF997FE /* SydneyTransit/Data/Repositories/DeparturesRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SydneyTransit/Data/Repositories/DeparturesRepository.swift; sourceTree = "<group>"; };
+		BB8136FFA1D3144240813D3791 /* SydneyTransit/Core/Network/APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SydneyTransit/Core/Network/APIClient.swift; sourceTree = "<group>"; };
+		BBCC5D28B94F9A439E88B893B4 /* SydneyTransit/Data/Models/Departure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SydneyTransit/Data/Models/Departure.swift; sourceTree = "<group>"; };
 		CC0000000000000000000001 /* SydneyTransit.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SydneyTransit.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CF92F9632ED050420048E013 /* StopAnnotation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StopAnnotation.swift; sourceTree = "<group>"; };
+		CF92F9642ED050420048E013 /* StopAnnotationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StopAnnotationView.swift; sourceTree = "<group>"; };
+		CF92F9652ED050420048E013 /* StopDetailsDrawer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StopDetailsDrawer.swift; sourceTree = "<group>"; };
+		CF92F9672ED050420048E013 /* MapCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapCoordinator.swift; sourceTree = "<group>"; };
+		CF92F9682ED050420048E013 /* MapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapView.swift; sourceTree = "<group>"; };
+		CF92F9692ED050420048E013 /* MapViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -80,43 +90,42 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		FF0000000000000000000001 = {
+		CF92F9622ED046390048E013 /* Recovered References */ = {
 			isa = PBXGroup;
 			children = (
-				FF0000000000000000000002 /* SydneyTransit */,
-				FF0000000000000000000003 /* Products */,
+				0DEF813EDD13476B8B426268 /* SydneyTransit/Features/Departures/DeparturesView.swift */,
+				5C7D78E67F5740468A80CF2B /* SydneyTransit/Features/Departures/DeparturesViewModel.swift */,
+				BBCC5D28B94F9A439E88B893B4 /* SydneyTransit/Data/Models/Departure.swift */,
+				BB8136FFA1D3144240813D3791 /* SydneyTransit/Core/Network/APIClient.swift */,
+				BB678CA7FD585847ED8EF997FE /* SydneyTransit/Data/Repositories/DeparturesRepository.swift */,
+				1A2B3C4D5E6F7A8B9C0D1E2F /* SydneyTransit/Features/Trips/TripDetailsView.swift */,
+				2B3C4D5E6F7A8B9C0D1E2F3A /* SydneyTransit/Features/Trips/TripDetailsViewModel.swift */,
+				5E6F7A8B9C0D1E2F3A4B5C6D /* SydneyTransit/Features/Trips/TripMapView.swift */,
+				3C4D5E6F7A8B9C0D1E2F3A4B /* SydneyTransit/Data/Models/Trip.swift */,
+				4D5E6F7A8B9C0D1E2F3A4B5C /* SydneyTransit/Data/Repositories/TripRepository.swift */,
 			);
+			name = "Recovered References";
 			sourceTree = "<group>";
 		};
-		FF0000000000000000000002 /* SydneyTransit */ = {
+		CF92F9662ED050420048E013 /* Components */ = {
 			isa = PBXGroup;
 			children = (
-				BB0000000000000000000001 /* SydneyTransitApp.swift */,
-				BB0000000000000000000006 /* Config-Example.plist */,
-				BB0000000000000000000007 /* Config.plist */,
-				DD0000000000000000000001 /* Core */,
-				DD0000000000000000000006 /* Data */,
-				DD0000000000000000000002 /* Features */,
-				FF0000000000000000000004 /* Resources */,
+				CF92F9632ED050420048E013 /* StopAnnotation.swift */,
+				CF92F9642ED050420048E013 /* StopAnnotationView.swift */,
+				CF92F9652ED050420048E013 /* StopDetailsDrawer.swift */,
 			);
-			path = SydneyTransit;
+			path = Components;
 			sourceTree = "<group>";
 		};
-		FF0000000000000000000003 /* Products */ = {
+		CF92F96A2ED050420048E013 /* Map */ = {
 			isa = PBXGroup;
 			children = (
-				CC0000000000000000000001 /* SydneyTransit.app */,
+				CF92F9662ED050420048E013 /* Components */,
+				CF92F9672ED050420048E013 /* MapCoordinator.swift */,
+				CF92F9682ED050420048E013 /* MapView.swift */,
+				CF92F9692ED050420048E013 /* MapViewModel.swift */,
 			);
-			name = Products;
-			sourceTree = "<group>";
-		};
-		FF0000000000000000000004 /* Resources */ = {
-			isa = PBXGroup;
-			children = (
-				BB0000000000000000000002 /* Assets.xcassets */,
-				BB0000000000000000000008 /* gtfs.db */,
-			);
-			path = Resources;
+			path = Map;
 			sourceTree = "<group>";
 		};
 		DD0000000000000000000001 /* Core */ = {
@@ -205,6 +214,47 @@
 			path = Routes;
 			sourceTree = "<group>";
 		};
+		FF0000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				FF0000000000000000000002 /* SydneyTransit */,
+				FF0000000000000000000003 /* Products */,
+				CF92F9622ED046390048E013 /* Recovered References */,
+			);
+			sourceTree = "<group>";
+		};
+		FF0000000000000000000002 /* SydneyTransit */ = {
+			isa = PBXGroup;
+			children = (
+				CF92F96A2ED050420048E013 /* Map */,
+				BB0000000000000000000001 /* SydneyTransitApp.swift */,
+				BB0000000000000000000006 /* Config-Example.plist */,
+				BB0000000000000000000007 /* Config.plist */,
+				DD0000000000000000000001 /* Core */,
+				DD0000000000000000000006 /* Data */,
+				DD0000000000000000000002 /* Features */,
+				FF0000000000000000000004 /* Resources */,
+			);
+			path = SydneyTransit;
+			sourceTree = "<group>";
+		};
+		FF0000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				CC0000000000000000000001 /* SydneyTransit.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		FF0000000000000000000004 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				BB0000000000000000000002 /* Assets.xcassets */,
+				BB0000000000000000000008 /* gtfs.db */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -257,7 +307,7 @@
 			packageReferences = (
 				RR0000000000000000000001 /* XCRemoteSwiftPackageReference "supabase-swift" */,
 				RR0000000000000000000002 /* XCRemoteSwiftPackageReference "swift-log" */,
-				RR0000000000000000000003 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
+				RR0000000000000000000003 /* XCRemoteSwiftPackageReference "GRDB" */,
 			);
 			productRefGroup = FF0000000000000000000003 /* Products */;
 			projectDirPath = "";
@@ -287,16 +337,16 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				4A68F7B3CEA94FAFAB8D68B9 /* DeparturesView.swift in Sources */,
-				9AB37B18786D41F2A8697290 /* DeparturesViewModel.swift in Sources */,
-				AA9681CF92837B4080BBDDBC5C /* Departure.swift in Sources */,
-				AA7F0987B75C6D400FB700E787 /* APIClient.swift in Sources */,
-				AA5E5CE0F7F4B34FB996AA004E /* DeparturesRepository.swift in Sources */,
-				AA1A2B3C4D5E6F7A8B9C0D1E2F /* TripDetailsView.swift in Sources */,
-				AA2B3C4D5E6F7A8B9C0D1E2F3A /* TripDetailsViewModel.swift in Sources */,
-				AA5E6F7A8B9C0D1E2F3A4B5C6D /* TripMapView.swift in Sources */,
-				AA3C4D5E6F7A8B9C0D1E2F3A4B /* Trip.swift in Sources */,
-				AA4D5E6F7A8B9C0D1E2F3A4B5C /* TripRepository.swift in Sources */,
+				4A68F7B3CEA94FAFAB8D68B9 /* SydneyTransit/Features/Departures/DeparturesView.swift in Sources */,
+				9AB37B18786D41F2A8697290 /* SydneyTransit/Features/Departures/DeparturesViewModel.swift in Sources */,
+				AA9681CF92837B4080BBDDBC5C /* SydneyTransit/Data/Models/Departure.swift in Sources */,
+				AA7F0987B75C6D400FB700E787 /* SydneyTransit/Core/Network/APIClient.swift in Sources */,
+				AA5E5CE0F7F4B34FB996AA004E /* SydneyTransit/Data/Repositories/DeparturesRepository.swift in Sources */,
+				AA1A2B3C4D5E6F7A8B9C0D1E2F /* SydneyTransit/Features/Trips/TripDetailsView.swift in Sources */,
+				AA2B3C4D5E6F7A8B9C0D1E2F3A /* SydneyTransit/Features/Trips/TripDetailsViewModel.swift in Sources */,
+				AA5E6F7A8B9C0D1E2F3A4B5C6D /* SydneyTransit/Features/Trips/TripMapView.swift in Sources */,
+				AA3C4D5E6F7A8B9C0D1E2F3A4B /* SydneyTransit/Data/Models/Trip.swift in Sources */,
+				AA4D5E6F7A8B9C0D1E2F3A4B5C /* SydneyTransit/Data/Repositories/TripRepository.swift in Sources */,
 				AA0000000000000000000001 /* SydneyTransitApp.swift in Sources */,
 				AA0000000000000000000003 /* Constants.swift in Sources */,
 				AA0000000000000000000004 /* Logger.swift in Sources */,
@@ -306,6 +356,12 @@
 				AA0000000000000000000011 /* Route.swift in Sources */,
 				AA0000000000000000000012 /* SearchView.swift in Sources */,
 				AA0000000000000000000013 /* StopDetailsView.swift in Sources */,
+				CF92F96B2ED050420048E013 /* StopAnnotation.swift in Sources */,
+				CF92F96C2ED050420048E013 /* StopDetailsDrawer.swift in Sources */,
+				CF92F96D2ED050420048E013 /* MapCoordinator.swift in Sources */,
+				CF92F96E2ED050420048E013 /* MapView.swift in Sources */,
+				CF92F96F2ED050420048E013 /* StopAnnotationView.swift in Sources */,
+				CF92F9702ED050420048E013 /* MapViewModel.swift in Sources */,
 				AA0000000000000000000014 /* RouteListView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -530,7 +586,7 @@
 				minimumVersion = 1.5.3;
 			};
 		};
-		RR0000000000000000000003 /* XCRemoteSwiftPackageReference "GRDB.swift" */ = {
+		RR0000000000000000000003 /* XCRemoteSwiftPackageReference "GRDB" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/groue/GRDB.swift";
 			requirement = {
@@ -553,7 +609,7 @@
 		};
 		QQ0000000000000000000003 /* GRDB */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = RR0000000000000000000003 /* XCRemoteSwiftPackageReference "GRDB.swift" */;
+			package = RR0000000000000000000003 /* XCRemoteSwiftPackageReference "GRDB" */;
 			productName = GRDB;
 		};
 /* End XCSwiftPackageProductDependency section */

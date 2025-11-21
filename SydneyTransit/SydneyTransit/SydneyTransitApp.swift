@@ -4,7 +4,7 @@ import Logging
 @main
 struct SydneyTransitApp: App {
     init() {
-        // Log app launcha  
+        // Log app launcha
         Logger.app.info("App launched")
 
         // Verify config loaded
