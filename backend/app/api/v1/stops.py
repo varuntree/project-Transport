@@ -216,7 +216,7 @@ async def get_departures(
                 detail={
                     "error": {
                         "code": "STOP_NOT_FOUND",
-                        "message": f"Stop with ID '{stop_id}' does not exist",
+                        "message": f"Stop with ID '{stop_id}' does not exist in database",
                         "details": {"stop_id": stop_id}
                     }
                 }

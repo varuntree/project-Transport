@@ -130,6 +130,15 @@ def get_realtime_departures(
         if not service_date:
             raise ValueError("service_date is required")
 
+        # Log diagnostic info for debugging identifier handling
+        logger.info(
+            "departures_lookup_start",
+            stop_id=stop_id,
+            stop_id_type=type(stop_id).__name__,
+            service_date=service_date,
+            time_secs_local=time_secs_local
+        )
+
         # Step 1: Fetch static schedules (phase 1 query)
         # Calculate actual departure time: trip_start_time + offset_secs
         # Bidirectional: >= time for future, <= time for past
@@ -173,7 +182,24 @@ def get_realtime_departures(
         static_deps = result.data or []
 
         if not static_deps:
-            logger.info("no_static_departures", stop_id=stop_id, service_date=service_date, time_secs=time_secs_local)
+            # Enhanced diagnostics: distinguish stop_not_found vs no_trips_scheduled
+            # Check if stop exists in stops table
+            stop_exists_result = supabase.table("stops").select("stop_id").eq("stop_id", stop_id).execute()
+            stop_exists = len(stop_exists_result.data) > 0 if stop_exists_result.data else False
+
+            # Check pattern_stops count for this stop (are there ANY trips for this stop?)
+            pattern_count_query = f"SELECT COUNT(*) as count FROM pattern_stops WHERE stop_id = '{stop_id}'"
+            pattern_count_result = supabase.rpc("exec_raw_sql", {"query": pattern_count_query}).execute()
+            pattern_stops_count = pattern_count_result.data[0]["count"] if pattern_count_result.data else 0
+
+            logger.warning(
+                "no_static_departures",
+                stop_id=stop_id,
+                stop_exists=stop_exists,
+                pattern_stops_count=pattern_stops_count,
+                service_date=service_date,
+                time_secs=time_secs_local
+            )
             return []
 
         # Step 2: Determine modes needed (heuristic from route_ids)
