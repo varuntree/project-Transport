@@ -1,5 +1,6 @@
 import Foundation
 import GRDB
+import Logging
 
 struct Stop: Codable, FetchableRecord, Identifiable {
     var id: Int { sid }
@@ -22,6 +23,8 @@ struct Stop: Codable, FetchableRecord, Identifiable {
 
     // FTS5 search (sanitized), optionally filtered by route_type
     static func search(_ db: Database, query: String, routeTypes: [Int]? = nil) throws -> [Stop] {
+        let start = CFAbsoluteTimeGetCurrent()
+
         // Sanitize query (remove FTS5 special chars)
         let punctuation = CharacterSet.punctuationCharacters
         let cleaned = query.unicodeScalars.map { scalar -> Character in
@@ -36,6 +39,8 @@ struct Stop: Codable, FetchableRecord, Identifiable {
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !sanitized.isEmpty else { return [] }
+
+        let results: [Stop]
 
         if let routeTypes = routeTypes, !routeTypes.isEmpty {
             // FTS5 MATCH + route_type filter via JOIN
@@ -57,7 +62,7 @@ struct Stop: Codable, FetchableRecord, Identifiable {
             arguments.append(sanitized + "*")
             arguments.append(contentsOf: routeTypes)
 
-            return try Stop.fetchAll(db, sql: sql, arguments: StatementArguments(arguments))
+            results = try Stop.fetchAll(db, sql: sql, arguments: StatementArguments(arguments))
         } else {
             // FTS5 MATCH only (existing behavior)
             let sql = """
@@ -68,8 +73,22 @@ struct Stop: Codable, FetchableRecord, Identifiable {
                 LIMIT 50
                 """
 
-            return try Stop.fetchAll(db, sql: sql, arguments: [sanitized + "*"])
+            results = try Stop.fetchAll(db, sql: sql, arguments: [sanitized + "*"])
         }
+
+        let duration = (CFAbsoluteTimeGetCurrent() - start) * 1000 // Convert to milliseconds
+
+        Logger.database.info(
+            "search_query_duration",
+            metadata: .from([
+                "query": query,
+                "route_types": routeTypes?.map(String.init).joined(separator: ",") ?? "all",
+                "result_count": results.count,
+                "duration_ms": Int(duration)
+            ])
+        )
+
+        return results
     }
 
     // Get stop by ID
