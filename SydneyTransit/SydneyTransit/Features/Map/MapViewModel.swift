@@ -14,6 +14,7 @@ class MapViewModel: NSObject, ObservableObject {
     @Published var isLoadingDepartures = false
     @Published var departuresErrorMessage: String?
 
+    private var loadedDepartureIds = Set<String>()  // Deduplication by full ID (tripId_scheduledTime)
     private var regionChangeTask: Task<Void, Never>?
     private let dbManager = DatabaseManager.shared
 
@@ -137,7 +138,11 @@ class MapViewModel: NSObject, ObservableObject {
 
             // Fetch static departures from GRDB
             let fetchedDepartures = try dbManager.getDepartures(stopId: stopId, limit: 20)
-            departures = fetchedDepartures
+
+            // Deduplicate (pattern model may return duplicate trips for same pattern)
+            let newDepartures = fetchedDepartures.filter { !loadedDepartureIds.contains($0.id) }
+            departures = newDepartures
+            loadedDepartureIds.formUnion(newDepartures.map { $0.id })
 
             Logger.map.info(
                 "drawer_departures_loaded",
@@ -166,6 +171,7 @@ class MapViewModel: NSObject, ObservableObject {
         selectedStop = nil
         departures = []
         departuresErrorMessage = nil
+        loadedDepartureIds.removeAll()
     }
 
     /// Center map on specific stop and open drawer
