@@ -350,8 +350,12 @@ def _apply_sydney_filter(data: Dict) -> Dict:
     orphan_stops_dedup = orphan_stops.drop_duplicates(subset=['stop_id'], keep='first')
     other_stops_dedup = other_stops.drop_duplicates(subset=['stop_id'], keep='first')
 
-    # Merge: deduped categories preserving hierarchy
-    sydney_stops_dedup = pd.concat([parent_stations_dedup, child_stops_dedup, orphan_stops_dedup, other_stops_dedup], ignore_index=True)
+    # Merge: deduped categories preserving hierarchy (priority order: child > orphan > parent > other)
+    sydney_stops_dedup = pd.concat([child_stops_dedup, orphan_stops_dedup, parent_stations_dedup, other_stops_dedup], ignore_index=True)
+
+    # Global deduplication by stop_id (Supabase primary key constraint)
+    # Keep first occurrence (priority: child > orphan > parent > other based on concat order)
+    sydney_stops_final = sydney_stops_dedup.drop_duplicates(subset=['stop_id'], keep='first')
 
     logger.info(
         "stops_smart_deduplication",
@@ -365,6 +369,13 @@ def _apply_sydney_filter(data: Dict) -> Dict:
         orphan_stops_after=len(orphan_stops_dedup),
         other_stops_before=len(other_stops),
         other_stops_after=len(other_stops_dedup)
+    )
+
+    logger.info(
+        "stops_global_deduplication",
+        stops_after_hierarchy=len(sydney_stops_dedup),
+        stops_after_global=len(sydney_stops_final),
+        duplicates_removed=len(sydney_stops_dedup) - len(sydney_stops_final)
     )
 
     # Deduplicate agencies (agencies appear across multiple feeds and coverage feeds)
@@ -382,7 +393,7 @@ def _apply_sydney_filter(data: Dict) -> Dict:
     # Convert to list of dicts for easier Supabase insertion
     result = {
         "agencies": agencies_dedup.to_dict("records"),
-        "stops": sydney_stops_dedup.to_dict("records"),
+        "stops": sydney_stops_final.to_dict("records"),
         "routes": sydney_routes_dedup.to_dict("records"),
         "trips": sydney_trips,  # Keep as DataFrame for pattern extraction
         "stop_times": sydney_stop_times,  # Keep as DataFrame
