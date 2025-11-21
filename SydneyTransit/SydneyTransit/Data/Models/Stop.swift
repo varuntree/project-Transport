@@ -20,8 +20,8 @@ struct Stop: Codable, FetchableRecord, Identifiable {
         case wheelchairBoarding = "wheelchair_boarding"
     }
 
-    // FTS5 search (sanitized)
-    static func search(_ db: Database, query: String) throws -> [Stop] {
+    // FTS5 search (sanitized), optionally filtered by route_type
+    static func search(_ db: Database, query: String, routeTypes: [Int]? = nil) throws -> [Stop] {
         // Sanitize query (remove FTS5 special chars)
         let punctuation = CharacterSet.punctuationCharacters
         let cleaned = query.unicodeScalars.map { scalar -> Character in
@@ -37,16 +37,39 @@ struct Stop: Codable, FetchableRecord, Identifiable {
 
         guard !sanitized.isEmpty else { return [] }
 
-        // FTS5 MATCH query
-        let sql = """
-            SELECT s.*
-            FROM stops s
-            JOIN stops_fts fts ON s.sid = fts.sid
-            WHERE stops_fts MATCH ?
-            LIMIT 50
-        """
+        if let routeTypes = routeTypes, !routeTypes.isEmpty {
+            // FTS5 MATCH + route_type filter via JOIN
+            // CRITICAL: FTS5 MATCH must be in WHERE clause (not JOIN ON) for index usage
+            let placeholders = routeTypes.map { _ in "?" }.joined(separator: ",")
+            let sql = """
+                SELECT DISTINCT s.*
+                FROM stops_fts
+                JOIN stops s ON stops_fts.rowid = s.rowid
+                JOIN pattern_stops ps ON s.sid = ps.sid
+                JOIN patterns p ON ps.pid = p.pid
+                JOIN routes r ON p.rid = r.rid
+                WHERE stops_fts MATCH ?
+                  AND r.route_type IN (\(placeholders))
+                LIMIT 50
+                """
 
-        return try Stop.fetchAll(db, sql: sql, arguments: [sanitized + "*"])
+            var arguments = [DatabaseValueConvertible]()
+            arguments.append(sanitized + "*")
+            arguments.append(contentsOf: routeTypes)
+
+            return try Stop.fetchAll(db, sql: sql, arguments: StatementArguments(arguments))
+        } else {
+            // FTS5 MATCH only (existing behavior)
+            let sql = """
+                SELECT s.*
+                FROM stops_fts
+                JOIN stops s ON stops_fts.rowid = s.rowid
+                WHERE stops_fts MATCH ?
+                LIMIT 50
+                """
+
+            return try Stop.fetchAll(db, sql: sql, arguments: [sanitized + "*"])
+        }
     }
 
     // Get stop by ID
