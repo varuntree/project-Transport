@@ -18,17 +18,20 @@ import os
 from pathlib import Path
 from typing import Dict, List, Any, Tuple
 
+VAR_DIR = Path(os.getenv("VAR_DIR", Path(__file__).resolve().parent.parent.parent / "var")).resolve()
+DEFAULT_IOS_DB_PATH = VAR_DIR / "data" / "gtfs.db"
+
 from app.db.supabase_client import get_supabase
 from app.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
 
-def generate_ios_db(output_path: str) -> Dict[str, Any]:
+def generate_ios_db(output_path: str = str(DEFAULT_IOS_DB_PATH)) -> Dict[str, Any]:
     """Generate iOS SQLite database from Supabase pattern tables.
 
     Args:
-        output_path: Path for generated gtfs.db (e.g., 'backend/ios_output/gtfs.db')
+        output_path: Path for generated gtfs.db (default: var/data/gtfs.db)
 
     Returns:
         Dict with generation summary: file_size_mb, row_counts, duration_ms

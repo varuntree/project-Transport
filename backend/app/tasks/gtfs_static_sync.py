@@ -13,7 +13,7 @@ import math
 from typing import Dict, List, Any
 from datetime import datetime
 
-from app.services.nsw_gtfs_downloader import download_gtfs_feeds
+from app.services.nsw_gtfs_downloader import download_gtfs_feeds, DEFAULT_GTFS_DIR
 from app.services.gtfs_service import parse_gtfs
 from app.db.supabase_client import get_supabase
 from app.utils.logging import get_logger
@@ -48,14 +48,14 @@ SCHEMA_FIELDS = {
 }
 
 
-def load_gtfs_static(output_dir: str = "temp/gtfs-downloads") -> Dict[str, Any]:
+def load_gtfs_static(output_dir: str = str(DEFAULT_GTFS_DIR)) -> Dict[str, Any]:
     """Load GTFS static data to Supabase.
 
     Orchestrates: download → parse → load pipeline.
     Validates NULL locations = 0, row counts match parser.
 
     Args:
-        output_dir: Directory for GTFS downloads (default: temp/gtfs-downloads)
+        output_dir: Directory for GTFS downloads (default: var/data/gtfs-downloads)
 
     Returns:
         Dict with load summary: counts, duration, validation results

@@ -29,3 +29,8 @@ htmlcov/
 scripts/.service_pids/
 logs/
 *.log
+var/
+temp/
+ios_output/
+*.pid
+celerybeat-schedule*

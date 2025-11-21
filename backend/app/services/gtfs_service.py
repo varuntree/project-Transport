@@ -64,7 +64,7 @@ def parse_gtfs(gtfs_base_dir: str) -> Dict:
 
     Args:
         gtfs_base_dir: Base directory containing mode subdirectories
-                      (e.g., 'temp/gtfs-downloads/')
+                      (e.g., 'var/data/gtfs-downloads/')
 
     Returns:
         Dict with keys: agencies, routes, stops, patterns, pattern_stops, trips, calendar, calendar_dates

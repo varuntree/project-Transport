@@ -6,9 +6,11 @@ Runs GTFS download + parse + load pipeline.
 
 import sys
 import os
+from pathlib import Path
 
-# Add backend to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add project root (backend/) to path
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.tasks.gtfs_static_sync import load_gtfs_static
 

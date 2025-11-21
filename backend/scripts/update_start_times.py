@@ -7,6 +7,7 @@ Parses stop_times.txt to calculate trip start times and updates DB.
 import csv
 from collections import defaultdict
 import os
+from pathlib import Path
 from supabase import create_client, Client
 
 # Get Supabase credentials from environment
@@ -18,6 +19,10 @@ if not SUPABASE_URL or not SUPABASE_KEY:
     exit(1)
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# Base directory for generated GTFS data
+VAR_DIR = Path(os.getenv("VAR_DIR", Path(__file__).resolve().parent.parent / "var")).resolve()
+GTFS_DIR = VAR_DIR / "data" / "gtfs-downloads"
 
 def time_to_seconds(time_str):
     """Convert HH:MM:SS to seconds since midnight"""
@@ -37,7 +42,7 @@ trip_start_times = {}  # {trip_id: start_time_secs}
 modes = ["sydneytrains", "metro", "buses", "lightrail", "mff", "sydneyferries"]
 
 for mode in modes:
-    filepath = f"../temp/gtfs-downloads/{mode}/stop_times.txt"
+    filepath = GTFS_DIR / mode / "stop_times.txt"
     if not os.path.exists(filepath):
         print(f"  Skipping {mode} (file not found)")
         continue

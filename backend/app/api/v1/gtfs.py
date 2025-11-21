@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import FileResponse
 import os
 import time
+from pathlib import Path
 
 from app.db.supabase_client import get_supabase
 from app.models.routes import GTFSMetadataResponse
@@ -11,6 +12,9 @@ from supabase import Client
 
 logger = get_logger(__name__)
 router = APIRouter()
+
+VAR_DIR = Path(os.getenv("VAR_DIR", Path(__file__).resolve().parent.parent.parent / "var")).resolve()
+GTFS_DB_PATH = VAR_DIR / "data" / "gtfs.db"
 
 @router.get("/version")
 async def get_gtfs_version(
@@ -52,15 +56,14 @@ async def download_gtfs_db():
     start_time = time.time()
 
     # Path to iOS SQLite file
-    db_path = os.path.join(os.path.dirname(__file__), "../../../ios_output/gtfs.db")
-    db_path = os.path.abspath(db_path)
+    db_path = GTFS_DB_PATH
 
-    if not os.path.exists(db_path):
-        logger.error("gtfs_db_not_found", path=db_path)
+    if not db_path.exists():
+        logger.error("gtfs_db_not_found", path=str(db_path))
         raise HTTPException(status_code=404, detail="iOS SQLite not generated yet")
 
     # Get file size for logging
-    file_size_mb = os.path.getsize(db_path) / 1024 / 1024
+    file_size_mb = db_path.stat().st_size / 1024 / 1024
     duration_ms = int((time.time() - start_time) * 1000)
 
     logger.info("gtfs_download_requested",
@@ -69,7 +72,7 @@ async def download_gtfs_db():
 
     # Stream file to client (FileResponse handles chunking automatically)
     return FileResponse(
-        path=db_path,
+        path=str(db_path),
         media_type="application/x-sqlite3",
         filename="gtfs.db",
         headers={

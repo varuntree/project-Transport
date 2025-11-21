@@ -1,15 +1,25 @@
 import structlog
 import logging
 import sys
+import os
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
+
+# Base directory for runtime artifacts; override with VAR_DIR env.
+# Defaults to <repo>/var to keep generated files out of source tree.
+VAR_DIR = Path(
+    os.getenv(
+        "VAR_DIR",
+        Path(__file__).resolve().parent.parent.parent / "var"
+    )
+).resolve()
 
 def configure_logging():
     """Configure structlog with JSON output for production"""
 
-    # Create logs directory
-    log_dir = Path(__file__).parent.parent.parent / "logs"
-    log_dir.mkdir(exist_ok=True)
+    # Create logs directory under var/
+    log_dir = VAR_DIR / "log"
+    log_dir.mkdir(parents=True, exist_ok=True)
 
     # Determine log file based on process type
     import sys

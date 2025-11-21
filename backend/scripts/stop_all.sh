@@ -1,12 +1,13 @@
 #!/bin/bash
 
 # Stop all backend services gracefully
-# Reads PIDs from scripts/.service_pids/*.pid
+# Reads PIDs from var/pids/*.pid (override with VAR_DIR)
 # Sends SIGTERM (graceful), waits 5s, then SIGKILL if needed
 
 cd "$(dirname "$0")/.."
 
-PID_DIR="scripts/.service_pids"
+VAR_DIR=${VAR_DIR:-var}
+PID_DIR="$VAR_DIR/pids"
 
 if [ ! -d "$PID_DIR" ] || [ -z "$(ls -A $PID_DIR 2>/dev/null)" ]; then
     echo "No running services found"

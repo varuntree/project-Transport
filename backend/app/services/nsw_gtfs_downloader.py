@@ -61,7 +61,10 @@ DELAY_BETWEEN_REQUESTS = 0.25
 DOWNLOAD_TIMEOUT = 60
 
 
-def download_gtfs_feeds(output_dir: str = "temp/gtfs-downloads") -> Dict[str, str]:
+DEFAULT_GTFS_DIR = Path(os.getenv("VAR_DIR", Path(__file__).resolve().parent.parent.parent / "var")) / "data" / "gtfs-downloads"
+
+
+def download_gtfs_feeds(output_dir: str = str(DEFAULT_GTFS_DIR)) -> Dict[str, str]:
     """Download all GTFS feeds from NSW API.
 
     Downloads 6 mode-specific GTFS ZIPs sequentially with rate limiting.
@@ -69,7 +72,7 @@ def download_gtfs_feeds(output_dir: str = "temp/gtfs-downloads") -> Dict[str, st
     Unzips each file to {output_dir}/{mode}/*.txt
 
     Args:
-        output_dir: Base directory for downloads (default: temp/gtfs-downloads)
+        output_dir: Base directory for downloads (default: var/data/gtfs-downloads)
 
     Returns:
         Dict mapping mode names to their output directories

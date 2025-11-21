@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Tail logs for backend services
+# Tail logs for backend services (default VAR_DIR=var)
 # Usage:
 #   ./scripts/logs.sh              - tail all logs
 #   ./scripts/logs.sh fastapi      - tail FastAPI only
@@ -10,7 +10,8 @@
 
 cd "$(dirname "$0")/.."
 
-LOG_DIR="logs"
+VAR_DIR=${VAR_DIR:-var}
+LOG_DIR="$VAR_DIR/log"
 
 if [ ! -d "$LOG_DIR" ]; then
     echo "No logs directory found. Start services first."
@@ -19,10 +20,10 @@ fi
 
 # Map service names to log files
 declare -A LOG_FILES=(
-    ["fastapi"]="logs/fastapi.log"
-    ["critical"]="logs/worker_critical.log"
-    ["service"]="logs/worker_service.log"
-    ["beat"]="logs/beat.log"
+    ["fastapi"]="$LOG_DIR/fastapi.log"
+    ["critical"]="$LOG_DIR/worker_critical.log"
+    ["service"]="$LOG_DIR/worker_service.log"
+    ["beat"]="$LOG_DIR/beat.log"
 )
 
 # If specific service requested

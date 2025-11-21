@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Start FastAPI only (for quick API testing)
-# Logs: backend/logs/fastapi.log
-# PID: backend/scripts/.service_pids/fastapi.pid
+# Logs: backend/var/log/fastapi.log (override with VAR_DIR)
+# PID: backend/var/pids/fastapi.pid (override with VAR_DIR)
 # Stop: ./scripts/stop_all.sh
 
 set -e
@@ -10,8 +10,13 @@ set -e
 # Change to backend directory
 cd "$(dirname "$0")/.."
 
-# Create PID directory
-mkdir -p scripts/.service_pids
+# Runtime directories (override with VAR_DIR env)
+VAR_DIR=${VAR_DIR:-var}
+PID_DIR="$VAR_DIR/pids"
+LOG_DIR="$VAR_DIR/log"
+
+# Create directories
+mkdir -p "$PID_DIR" "$LOG_DIR"
 
 # Activate virtual environment if exists
 if [ -f "venv/bin/activate" ]; then
@@ -19,7 +24,7 @@ if [ -f "venv/bin/activate" ]; then
 fi
 
 # Check if FastAPI is already running
-PID_FILE="scripts/.service_pids/fastapi.pid"
+PID_FILE="$PID_DIR/fastapi.pid"
 if [ -f "$PID_FILE" ]; then
     OLD_PID=$(cat "$PID_FILE")
     if kill -0 "$OLD_PID" 2>/dev/null; then
@@ -33,7 +38,7 @@ fi
 
 echo "Starting FastAPI server..."
 echo "  - API: http://localhost:8000"
-echo "  - Logs: logs/fastapi.log"
+echo "  - Logs: $LOG_DIR/fastapi.log"
 echo "  - PID: $PID_FILE"
 echo ""
 echo "Stop with: ./scripts/stop_all.sh"
