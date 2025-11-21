@@ -158,17 +158,24 @@ struct SearchView: View {
         let startTime = Date()
 
         do {
+            // Map selectedMode to routeTypes array
+            let routeTypes = selectedMode.routeTypes
+
+            // Call Stop.search() with routeTypes parameter
             let results = try DatabaseManager.shared.read { db in
-                try Stop.search(db, query: query)
+                try Stop.search(db, query: query, routeTypes: routeTypes)
             }
 
             let duration = Date().timeIntervalSince(startTime) * 1000 // ms
 
+            // Log search results with mode and route type info for validation
             Logger.database.info(
-                "search_completed",
+                "search_results",
                 metadata: .from([
+                    "mode": selectedMode.rawValue,
                     "query": query,
-                    "results_count": results.count,
+                    "count": results.count,
+                    "route_types": routeTypes?.map(String.init).joined(separator: ",") ?? "all",
                     "duration_ms": Int(duration)
                 ])
             )
@@ -198,6 +205,7 @@ struct SearchView: View {
             Logger.database.error(
                 "search_failed",
                 metadata: .from([
+                    "mode": selectedMode.rawValue,
                     "query": query,
                     "error": error.localizedDescription
                 ])
