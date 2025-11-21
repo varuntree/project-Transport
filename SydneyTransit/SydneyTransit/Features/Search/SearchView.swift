@@ -17,7 +17,7 @@ enum SearchMode: String, CaseIterable {
         case .train: return [2]
         case .bus: return [3, 700, 712, 714]
         case .ferry: return [4]
-        case .lightRail: return [900]
+        case .lightRail: return [0, 900]  // Include both GTFS standard (0) and NSW variant (900)
         case .metro: return [1, 401]
         }
     }

@@ -1,34 +1,55 @@
 # GTFS Static Feed Coverage Matrix
 
-This matrix documents which NSW static GTFS feeds we use, and how they participate in the GTFS static pipeline.
+Documents which NSW GTFS feeds participate in pattern model extraction vs coverage-only merging.
 
-| Feed Key      | Endpoint                                             | Used for Download | Used for Pattern Model (trips/stop_times) | Used for Stop/Route Coverage | Notes |
-|--------------|------------------------------------------------------|-------------------|-------------------------------------------|-------------------------------|-------|
-| sydneytrains | `/v1/gtfs/schedule/sydneytrains`                     | ✅                | ✅                                        | ✅                            | Sydney Trains static aligned with v1 realtime feeds. |
-| metro        | `/v2/gtfs/schedule/metro`                            | ✅                | ✅                                        | ✅                            | Metro static aligned with v2 realtime feeds. |
-| buses        | `/v1/gtfs/schedule/buses`                            | ✅                | ✅                                        | ✅                            | All bus operators used for pattern model + coverage. |
-| sydneyferries| `/v1/gtfs/schedule/ferries/sydneyferries`            | ✅                | ✅                                        | ✅                            | Sydney Ferries static aligned with ferry realtime. |
-| mff          | `/v1/gtfs/schedule/ferries/MFF`                      | ✅                | ✅                                        | ✅                            | Manly Fast Ferry static aligned with MFF realtime. |
-| lightrail    | `/v1/gtfs/schedule/lightrail`                        | ✅                | ✅                                        | ✅                            | Light rail static for L1/L2/L3; used in pattern model. |
-| complete     | `/v1/publictransport/timetables/complete/gtfs`       | ✅                | ❌                                        | ✅ (agencies/stops/routes)    | Full NSW bundle, used to augment coverage only (no trips/stop_times used). |
-| ferries_all  | `/v1/gtfs/schedule/ferries`                          | ✅                | ❌                                        | ✅ (agencies/stops/routes)    | All ferry contracts; used to ensure wharves like Davistown Central RSL Wharf are present. |
-| nswtrains    | `/v1/gtfs/schedule/nswtrains`                        | ✅                | ❌                                        | ✅ (agencies/stops/routes)    | NSW TrainLink regional trains; coverage-only in current pattern model. |
-| regionbuses  | `/v1/gtfs/schedule/regionbuses`                      | ✅                | ❌                                        | ✅ (agencies/stops/routes)    | Regional buses; provides coverage for regional stops beyond main Sydney feeds. |
+## Critical Architecture Decision: MODE_DIRS vs COVERAGE_EXTRA_DIRS
+
+**Pattern Model Feeds (MODE_DIRS):**
+Extract trips/stop_times for pattern-based schedule storage. MUST verify GTFS-RT trip_id alignment.
+
+**Coverage Feeds (COVERAGE_EXTRA_DIRS):**
+Agencies/stops/routes only (NO trips/stop_times). Improve coverage beyond realtime-aligned feeds.
+
+| Feed Key      | Endpoint | Used for Patterns | Used for Coverage | Notes |
+|--------------|----------|-------------------|-------------------|-------|
+| sydneytrains | `/v1/gtfs/schedule/sydneytrains` | ✅ | ✅ | Sydney Trains v1, aligns with v1 realtime |
+| metro | `/v2/gtfs/schedule/metro` | ✅ | ✅ | Metro v2, aligns with v2 realtime |
+| buses | `/v1/gtfs/schedule/buses` | ✅ | ✅ | All bus operators, aligns with v1 realtime |
+| sydneyferries | `/v1/gtfs/schedule/ferries/sydneyferries` | ✅ | ✅ | Sydney Ferries, aligns with ferry realtime |
+| mff | `/v1/gtfs/schedule/ferries/MFF` | ✅ | ✅ | Manly Fast Ferry, aligns with MFF realtime |
+| **complete** | `/v1/publictransport/timetables/complete/gtfs` | ✅ **filtered** | ✅ | **Light rail source:** filter route_type 0/900 for patterns. Full NSW agencies/stops/routes for coverage. |
+| ferries_all | `/v1/gtfs/schedule/ferries` | ❌ | ✅ | All ferry contracts, coverage only (wharves like Davistown) |
+| nswtrains | `/v1/gtfs/schedule/nswtrains` | ❌ | ✅ | NSW TrainLink regional, coverage only |
+| regionbuses | `/v1/gtfs/schedule/regionbuses` | ❌ | ✅ | Regional buses, coverage only |
+| ~~lightrail~~ | ~~`/v1/gtfs/schedule/lightrail`~~ | **❌ EXCLUDED** | ❌ | **INCOMPLETE (only L1) + CONTAMINATED (train platforms). Use complete feed filtered by route_type 0/900.** |
+
+## Light Rail Coverage Fix (Nov 2024)
+
+**Problem:** lightrail feed incomplete (1 route vs 6 in complete) + contaminated with train stops
+
+**Solution:**
+1. Exclude lightrail from MODE_DIRS
+2. Add complete to MODE_DIRS with route_type filter
+3. Extract patterns from complete feed WHERE route_type IN (0, 900)
+4. Prefix trip_ids to avoid collisions: `complete_lr_{original_trip_id}`
+
+**Validation:**
+- Light rail routes ≥3
+- Light rail trips ≥6000
+- Light rail stops ~120-130 distinct
+- Zero train platforms in light rail patterns
 
 ## Coverage Model Summary
 
-- **Pattern model feeds:** `sydneytrains`, `metro`, `buses`, `sydneyferries`, `mff`, `lightrail`  
-  These supply `trips`, `stop_times`, and associated `routes`/`calendar` for pattern extraction and GTFS‑RT alignment.
+- **Pattern model feeds (MODE_DIRS):** `sydneytrains`, `metro`, `buses`, `sydneyferries`, `mff`, `complete` (filtered)
+  - Supply `trips`, `stop_times`, and associated `routes`/`calendar` for pattern extraction
+  - **MUST** align with GTFS-RT trip_ids for real-time departures
 
-- **Coverage-only feeds:** `complete`, `ferries_all`, `nswtrains`, `regionbuses`  
-  These are merged into `agencies`, `stops`, and `routes` to improve stop and route coverage (especially for ferry wharves and regional services). They do **not** currently contribute `trips`/`stop_times` to the pattern model.
+- **Coverage-only feeds (COVERAGE_EXTRA_DIRS):** `complete`, `ferries_all`, `nswtrains`, `regionbuses`
+  - Merged into `agencies`, `stops`, and `routes` only (NO trips/stop_times used)
+  - Improve stop/route coverage (ferry wharves, regional services)
+  - No GTFS-RT alignment concerns
 
 ## Davistown Central RSL Wharf
 
-Davistown Central RSL Wharf is used as a reference “must-exist” stop in validation. It is expected to appear in at least one of:
-
-- The broader ferry static feeds (`ferries_all` or `complete`), and
-- The Sydney bbox used in `_apply_sydney_filter`.
-
-If this stop is missing after a GTFS load, validation in `gtfs_static_sync._validate_load` will fail and surface this as a critical coverage error.
-
+Reference "must-exist" stop from ferries_all/complete coverage feeds. Expected in Sydney bbox. Validation fails if missing.

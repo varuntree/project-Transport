@@ -158,6 +158,67 @@ def load_gtfs_static(output_dir: str = str(DEFAULT_GTFS_DIR)) -> Dict[str, Any]:
         raise
 
 
+def _cleanup_stale_light_rail_data(supabase) -> None:
+    """Delete stale light rail data before fresh load.
+
+    Prevents accumulation of corrupted patterns (e.g. train platforms in light rail routes)
+    when GTFS feeds shrink or change. Deletes in reverse dependency order.
+
+    Args:
+        supabase: Supabase client
+    """
+    logger.info("gtfs_cleanup_start", target="light_rail_routes")
+
+    try:
+        # Step 1: Find light rail route_ids (route_type 0 or 900)
+        routes_response = supabase.table("routes").select("route_id").in_("route_type", [0, 900]).execute()
+        lr_route_ids = [r["route_id"] for r in routes_response.data]
+
+        if not lr_route_ids:
+            logger.warning("gtfs_cleanup_no_light_rail_routes")
+            return
+
+        logger.info("gtfs_cleanup_found_routes", count=len(lr_route_ids))
+
+        # Step 2: Delete in reverse dependency order (trips → pattern_stops → patterns → routes)
+
+        # Delete trips for light rail routes
+        trips_deleted = supabase.table("trips").delete().in_("route_id", lr_route_ids).execute()
+        trips_count = len(trips_deleted.data) if trips_deleted.data else 0
+        logger.info("gtfs_cleanup_deleted", table="trips", count=trips_count)
+
+        # Delete pattern_stops for light rail patterns
+        patterns_response = supabase.table("patterns").select("pattern_id").in_("route_id", lr_route_ids).execute()
+        lr_pattern_ids = [p["pattern_id"] for p in patterns_response.data]
+
+        if lr_pattern_ids:
+            pattern_stops_deleted = supabase.table("pattern_stops").delete().in_("pattern_id", lr_pattern_ids).execute()
+            pattern_stops_count = len(pattern_stops_deleted.data) if pattern_stops_deleted.data else 0
+            logger.info("gtfs_cleanup_deleted", table="pattern_stops", count=pattern_stops_count)
+
+        # Delete patterns for light rail routes
+        patterns_deleted = supabase.table("patterns").delete().in_("route_id", lr_route_ids).execute()
+        patterns_count = len(patterns_deleted.data) if patterns_deleted.data else 0
+        logger.info("gtfs_cleanup_deleted", table="patterns", count=patterns_count)
+
+        # Delete routes (route_type 0/900)
+        routes_deleted = supabase.table("routes").delete().in_("route_type", [0, 900]).execute()
+        routes_count = len(routes_deleted.data) if routes_deleted.data else 0
+        logger.info("gtfs_cleanup_deleted", table="routes", count=routes_count)
+
+        logger.info(
+            "gtfs_cleanup_complete",
+            routes=routes_count,
+            patterns=patterns_count,
+            pattern_stops=pattern_stops_count if lr_pattern_ids else 0,
+            trips=trips_count
+        )
+
+    except Exception as e:
+        logger.error("gtfs_cleanup_failed", error=str(e), error_type=type(e).__name__)
+        raise
+
+
 def _load_to_supabase(data: Dict[str, List[Dict]]) -> Dict[str, int]:
     """Load all tables to Supabase in dependency order.
 
@@ -169,6 +230,10 @@ def _load_to_supabase(data: Dict[str, List[Dict]]) -> Dict[str, int]:
     """
     supabase = get_supabase()
     counts = {}
+
+    # Pre-load cleanup: Delete stale light rail data to prevent corruption
+    # (route_type 0/900 patterns/trips may accumulate train platforms from previous loads)
+    _cleanup_stale_light_rail_data(supabase)
 
     for table_name in LOAD_ORDER:
         rows = data.get(table_name, [])
@@ -428,7 +493,96 @@ def _validate_load(parsed_data: Dict[str, List[Dict]], loaded_counts: Dict[str, 
         issues.append(issue)
         logger.error("gtfs_validation_mode_coverage_error", error=str(e))
 
-    # Check 6: Critical stop whitelist (must-exist stops)
+    # Check 6: Light rail minimum coverage (hardened to catch L2/L3 missing)
+    try:
+        # Count light rail routes (route_type 0 or 900)
+        lr_routes_response = supabase.table("routes").select("route_id", count="exact").in_("route_type", [0, 900]).execute()
+        lr_routes_count = lr_routes_response.count
+
+        # Minimum thresholds (Sydney has L1/L2/L3 at minimum)
+        min_lr_routes = 3
+        min_lr_trips = 6000
+        min_lr_stops = 100
+
+        if lr_routes_count < min_lr_routes:
+            issue = f"Light rail routes too low: {lr_routes_count} < {min_lr_routes} (missing L2/L3?)"
+            issues.append(issue)
+            logger.error("gtfs_validation_light_rail_routes_failed", actual=lr_routes_count, threshold=min_lr_routes)
+
+        # Count light rail trips
+        lr_route_ids = [r["route_id"] for r in lr_routes_response.data]
+        if lr_route_ids:
+            lr_trips_response = supabase.table("trips").select("trip_id", count="exact").in_("route_id", lr_route_ids).execute()
+            lr_trips_count = lr_trips_response.count
+
+            if lr_trips_count < min_lr_trips:
+                issue = f"Light rail trips too low: {lr_trips_count} < {min_lr_trips}"
+                issues.append(issue)
+                logger.error("gtfs_validation_light_rail_trips_failed", actual=lr_trips_count, threshold=min_lr_trips)
+
+            # Count distinct stops in light rail patterns
+            lr_patterns_response = supabase.table("patterns").select("pattern_id").in_("route_id", lr_route_ids).execute()
+            lr_pattern_ids = [p["pattern_id"] for p in lr_patterns_response.data]
+
+            if lr_pattern_ids:
+                # Count distinct stops via pattern_stops
+                lr_stops_response = supabase.rpc("count_distinct_stops_in_patterns", {"pattern_ids": lr_pattern_ids}).execute()
+                lr_stops_count = lr_stops_response.data if lr_stops_response.data else 0
+
+                if lr_stops_count < min_lr_stops:
+                    issue = f"Light rail stops too low: {lr_stops_count} < {min_lr_stops}"
+                    issues.append(issue)
+                    logger.error("gtfs_validation_light_rail_stops_failed", actual=lr_stops_count, threshold=min_lr_stops)
+
+                logger.info(
+                    "gtfs_validation_light_rail_coverage",
+                    routes=lr_routes_count,
+                    trips=lr_trips_count,
+                    stops=lr_stops_count
+                )
+    except Exception as e:
+        # Light rail validation is critical; if RPC fails, use best-effort query
+        logger.warning("gtfs_validation_light_rail_rpc_failed", error=str(e))
+        # Fallback: just check routes and trips (stops check requires RPC)
+        try:
+            lr_routes_response = supabase.table("routes").select("route_id", count="exact").in_("route_type", [0, 900]).execute()
+            lr_routes_count = lr_routes_response.count
+            if lr_routes_count < 3:
+                issue = f"Light rail routes too low: {lr_routes_count} < 3"
+                issues.append(issue)
+        except Exception as e2:
+            issue = f"Failed to verify light rail coverage: {str(e2)}"
+            issues.append(issue)
+            logger.error("gtfs_validation_light_rail_error", error=str(e2))
+
+    # Check 7: Light rail contamination (no train platforms in light rail patterns)
+    try:
+        # Query for train platforms in light rail patterns
+        # This uses a SQL join; if too slow, upgrade to Redis index later
+        contamination_query = """
+            SELECT COUNT(*) as count
+            FROM pattern_stops ps
+            JOIN patterns p ON ps.pattern_id = p.pattern_id
+            JOIN routes r ON p.route_id = r.route_id
+            JOIN stops s ON ps.stop_id = s.stop_id
+            WHERE r.route_type IN (0, 900)
+            AND s.stop_name LIKE '%Platform%'
+        """
+        contamination_response = supabase.rpc("execute_sql", {"query": contamination_query}).execute()
+        contamination_count = contamination_response.data[0]["count"] if contamination_response.data else 0
+
+        # Allow tiny tolerance (1-2 stops) for edge cases, but fail if >5
+        if contamination_count > 5:
+            issue = f"Light rail patterns contaminated with {contamination_count} train platforms"
+            issues.append(issue)
+            logger.error("gtfs_validation_light_rail_contamination", count=contamination_count)
+        elif contamination_count > 0:
+            logger.warning("gtfs_validation_light_rail_contamination_minor", count=contamination_count)
+    except Exception as e:
+        # Contamination check is nice-to-have; log warning but don't fail
+        logger.warning("gtfs_validation_contamination_check_failed", error=str(e))
+
+    # Check 8: Critical stop whitelist (must-exist stops)
     critical_stops = [
         # Names/IDs are based on NSW GTFS; update if feed naming changes.
         {"stop_id": None, "stop_name": "Central Station"},
@@ -467,12 +621,12 @@ def _validate_load(parsed_data: Dict[str, List[Dict]], loaded_counts: Dict[str, 
         logger.error("gtfs_validation_failed", total_issues=len(issues), issues=issues)
         raise ValueError(error_msg)
 
-    logger.info("gtfs_validation_passed", checks_passed=6)
+    logger.info("gtfs_validation_passed", checks_passed=8)
 
     return {
         "passed": passed,
         "issues": issues,
-        "checks_run": 6,
+        "checks_run": 8,
         "null_locations": 0,
         "db_stops_count": db_stops_count if 'db_stops_count' in locals() else loaded_counts.get("stops", 0)
     }

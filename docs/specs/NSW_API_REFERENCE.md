@@ -100,6 +100,14 @@ All paths relative to `https://api.transport.nsw.gov.au`
 | L1 Inner West LR | v1 | `/v1/gtfs/schedule/lightrail/innerwest` | ⚠️ Doc-based | Per-line static |
 | L2/L3 CBD & SE LR | v1 | `/v1/gtfs/schedule/lightrail/cbdandsoutheast` | ⚠️ Doc-based | Per-line static |
 | Parramatta LR | v1 | `/v1/gtfs/schedule/lightrail/parramatta` | ⚠️ Doc-based | Per-line static |
+
+**⚠️ CRITICAL: Light Rail Coverage Issue (Nov 2024)**
+- `/v1/gtfs/schedule/lightrail` feed is **INCOMPLETE** (only L1 as of Nov 2024)
+- Complete feed `/v1/publictransport/timetables/complete/gtfs` contains all 6 light rail routes (L1-L4 + variants)
+- **Known contamination:** `lightrail` feed includes train platform stops (`route_type=0`)
+- **Recommendation:** Use complete feed for light rail pattern extraction, filter by `route_type IN (0, 900)`
+- See `backend/docs/gtfs-coverage-matrix.md` for detailed feed selection strategy
+
 | Sydney Trains (v1) | v1 | `/v1/gtfs/schedule/sydneytrains` | ⚠️ Doc-based | Legacy static for v1 realtime |
 | Sydney Trains (v2) | v2 | `/v2/gtfs/schedule/sydneytrains` | ⚠️ Doc-based | **Use this for v2 realtime alignment** |
 | Metro | v2 | `/v2/gtfs/schedule/metro` | ⚠️ Doc-based | **Use for metro realtime alignment** |
@@ -109,6 +117,30 @@ All paths relative to `https://api.transport.nsw.gov.au`
 **Key Insight:**
 - **Complete GTFS** - Use for global stop/route search, non-realtime operators
 - **"For Realtime" per-mode** - **REQUIRED** for trip_id/stop_id alignment with GTFS-RT feeds
+
+#### 3.1.1 Feed Selection Strategy for GTFS-RT Alignment
+
+**Pattern Model Feeds (trips/stop_times):**
+Must verify trip_id alignment with GTFS-RT before using:
+- Sydney Trains v2 ✅ (aligns with v2 realtime)
+- Metro v2 ✅ (aligns with v2 realtime)
+- Buses ✅ (aligns with v1 realtime)
+- Sydney Ferries ✅ (aligns with ferry realtime)
+- Manly Fast Ferry ✅ (aligns with MFF realtime)
+- **Light Rail ❌ (incomplete, use complete feed filtered by route_type 0/900)**
+
+**Coverage Feeds (stops/routes only):**
+Safe for coverage without GTFS-RT concerns:
+- Complete feed (all NSW)
+- Ferries all contracts
+- NSW TrainLink regional
+- Regional buses
+
+**Why exclude lightrail feed from pattern model:**
+- Nov 2024: lightrail feed returns only L1 (1 route, ~1,300 trips)
+- Complete feed has all 6 routes (~6,750 trips, ~126 stops)
+- lightrail feed contaminated with train platforms (`route_type=0`)
+- Must filter complete feed by `route_type IN (0, 900)` for light rail patterns
 
 ---
 

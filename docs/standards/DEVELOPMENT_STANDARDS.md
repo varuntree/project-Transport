@@ -1319,6 +1319,125 @@ dependencies: [
 
 ---
 
+### GTFS Load Validation Standards
+
+**Pre-Load Cleanup (Prevent Stale Data):**
+```python
+# Always delete stale rows for route_types being reloaded
+def cleanup_route_type(supabase, route_types: list[int]):
+    """Delete stale data before loading fresh feed.
+
+    Args:
+        route_types: List of GTFS route_type codes to clean (e.g., [0, 900] for light rail)
+
+    Order: pattern_stops → trips → patterns → routes (reverse FK dependencies)
+    """
+    # Get route_ids for this route_type
+    routes = supabase.table("routes") \\
+        .select("route_id") \\
+        .in_("route_type", route_types) \\
+        .execute()
+
+    if not routes.data:
+        return
+
+    route_ids = [r["route_id"] for r in routes.data]
+
+    # Delete in reverse FK order
+    supabase.rpc("delete_pattern_stops_by_route_ids", {"route_ids": route_ids})
+    supabase.rpc("delete_trips_by_route_ids", {"route_ids": route_ids})
+    supabase.rpc("delete_patterns_by_route_ids", {"route_ids": route_ids})
+    supabase.table("routes").delete().in_("route_id", route_ids).execute()
+```
+
+**Post-Load Validation (Minimum Thresholds):**
+```python
+def validate_light_rail_coverage(db):
+    """Fail build if light rail coverage below thresholds.
+
+    Prevents silent data loss and contamination issues.
+    """
+    # Check route count
+    lr_routes = db.execute(
+        "SELECT COUNT(*) FROM routes WHERE route_type IN (0, 900)"
+    ).fetchone()[0]
+
+    if lr_routes < 3:
+        raise ValidationError(f"Light rail routes {lr_routes} < 3 minimum")
+
+    # Check trip count
+    lr_trips = db.execute(
+        "SELECT COUNT(*) FROM trips t "
+        "JOIN patterns p ON t.pattern_id = p.pattern_id "
+        "JOIN routes r ON p.route_id = r.route_id "
+        "WHERE r.route_type IN (0, 900)"
+    ).fetchone()[0]
+
+    if lr_trips < 6000:
+        raise ValidationError(f"Light rail trips {lr_trips} < 6000 minimum")
+
+    # Check stop count
+    lr_stops = db.execute(
+        "SELECT COUNT(DISTINCT ps.stop_id) FROM pattern_stops ps "
+        "JOIN patterns p ON ps.pattern_id = p.pattern_id "
+        "JOIN routes r ON p.route_id = r.route_id "
+        "WHERE r.route_type IN (0, 900)"
+    ).fetchone()[0]
+
+    if lr_stops < 100:
+        raise ValidationError(f"Light rail stops {lr_stops} < 100 minimum")
+
+    # Check contamination
+    contamination = db.execute(
+        "SELECT COUNT(*) FROM pattern_stops ps "
+        "JOIN patterns p ON ps.pattern_id = p.pattern_id "
+        "JOIN routes r ON p.route_id = r.route_id "
+        "JOIN stops s ON ps.stop_id = s.stop_id "
+        "WHERE r.route_type IN (0, 900) "
+        "AND s.stop_name LIKE '%Platform%' "
+        "AND s.stop_name NOT LIKE '%Light Rail%'"
+    ).fetchone()[0]
+
+    if contamination > 0:
+        raise ValidationError(
+            f"Light rail contaminated with {contamination} train platforms"
+        )
+
+    logger.info("light_rail_validation_passed",
+                routes=lr_routes, trips=lr_trips, stops=lr_stops)
+```
+
+**Logging Delta for Regression Detection:**
+```python
+def log_route_type_delta(old_counts: dict, new_counts: dict):
+    """Log before/after counts per route_type to catch regressions."""
+    for route_type in [0, 1, 2, 3, 4, 900]:
+        old = old_counts.get(route_type, 0)
+        new = new_counts.get(route_type, 0)
+        delta_pct = ((new - old) / old * 100) if old > 0 else 0
+
+        logger.info("route_type_delta",
+                    route_type=route_type,
+                    old=old, new=new, delta_pct=delta_pct)
+
+        if delta_pct < -10:
+            logger.error("coverage_regression",
+                         route_type=route_type,
+                         delta_pct=delta_pct)
+```
+
+**Validation Thresholds:**
+
+| Mode | route_type | min_routes | min_trips | min_stops |
+|------|-----------|-----------|-----------|-----------|
+| Light Rail | 0, 900 | 3 | 6000 | 100 |
+| Sydney Trains | 2 | 10 | 15000 | 300 |
+| Metro | 1 | 1 | 2000 | 13 |
+| Buses | 3 | 200 | 40000 | 3000 |
+| Ferries | 4 | 5 | 500 | 30 |
+
+---
+
 ## 12. Privacy & Security
 
 ### Data Collection (Minimal)

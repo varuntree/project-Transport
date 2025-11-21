@@ -154,6 +154,37 @@ def _load_and_merge_feeds(base_path: Path) -> Dict:
             stop_times = pd.read_csv(mode_path / "stop_times.txt", dtype=str)
             calendar = pd.read_csv(mode_path / "calendar.txt", dtype=str)
 
+            # BUGFIX: Filter contaminated train platforms from lightrail feed
+            # NSW lightrail endpoint incorrectly includes train platforms in stop_times
+            # Filter these out to prevent light rail patterns from showing train stops
+            if mode == "lightrail":
+                stops_before = len(stops)
+                st_before = len(stop_times)
+
+                # Identify contaminated stops (contain "Platform" in name, excluding genuine light rail platforms)
+                # Light rail platforms are named like "Central Grand Concourse Light Rail Platform 1"
+                # Train platforms are named like "Central Station Platform 20"
+                contaminated_stops = stops[
+                    stops["stop_name"].str.contains("Platform", na=False) &
+                    ~stops["stop_name"].str.contains("Light Rail", na=False)
+                ]["stop_id"]
+
+                # Remove contaminated stops from stop_times
+                stop_times = stop_times[~stop_times["stop_id"].isin(contaminated_stops)]
+
+                # Remove contaminated stops from stops table
+                stops = stops[~stops["stop_id"].isin(contaminated_stops)]
+
+                logger.info(
+                    "lightrail_contamination_filtered",
+                    mode=mode,
+                    contaminated_stops_removed=len(contaminated_stops),
+                    stops_before=stops_before,
+                    stops_after=len(stops),
+                    stop_times_before=st_before,
+                    stop_times_after=len(stop_times)
+                )
+
             # Prefix IDs to avoid conflicts across modes
             trips["trip_id"] = mode + "_" + trips["trip_id"].astype(str)
             stop_times["trip_id"] = mode + "_" + stop_times["trip_id"].astype(str)
@@ -202,9 +233,15 @@ def _load_and_merge_feeds(base_path: Path) -> Dict:
         calendar_dates_df = None
 
     # Best-effort: merge additional coverage feeds for agencies/stops/routes only.
+    # SPECIAL CASE: Merge light rail trips/stop_times/calendar from "complete" feed
+    # (NSW lightrail endpoint is incomplete; L2/L3 exist only in complete feed)
     extra_agencies = []
     extra_stops = []
     extra_routes = []
+    light_rail_trips = []
+    light_rail_stop_times = []
+    light_rail_calendar = []
+    light_rail_calendar_dates = []
 
     for coverage_mode in COVERAGE_EXTRA_DIRS:
         mode_path = base_path / coverage_mode
@@ -223,6 +260,58 @@ def _load_and_merge_feeds(base_path: Path) -> Dict:
             if routes_path.exists():
                 extra_routes.append(pd.read_csv(routes_path, dtype=str))
 
+            # Special handling for "complete" feed: merge light rail trips/stop_times/calendar
+            # Filter by route_type in {0, 900} to get only light rail schedules
+            if coverage_mode == "complete":
+                trips_path = mode_path / "trips.txt"
+                stop_times_path = mode_path / "stop_times.txt"
+                calendar_path = mode_path / "calendar.txt"
+                calendar_dates_path = mode_path / "calendar_dates.txt"
+
+                if trips_path.exists() and routes_path.exists():
+                    # Load routes to identify light rail route_ids
+                    complete_routes = pd.read_csv(routes_path, dtype=str)
+                    lr_route_ids = complete_routes[
+                        complete_routes["route_type"].isin(["0", "900"])
+                    ]["route_id"].unique()
+
+                    # Load trips and filter to light rail routes
+                    complete_trips = pd.read_csv(trips_path, dtype=str)
+                    lr_trips = complete_trips[complete_trips["route_id"].isin(lr_route_ids)].copy()
+
+                    # Prefix trip_ids to avoid collisions with mode-specific feeds
+                    lr_trips["trip_id"] = "complete_lr_" + lr_trips["trip_id"].astype(str)
+                    light_rail_trips.append(lr_trips)
+
+                    # Load stop_times and filter to light rail trip_ids
+                    if stop_times_path.exists():
+                        complete_stop_times = pd.read_csv(stop_times_path, dtype=str)
+                        lr_trip_ids_original = complete_trips[complete_trips["route_id"].isin(lr_route_ids)]["trip_id"]
+                        lr_stop_times = complete_stop_times[complete_stop_times["trip_id"].isin(lr_trip_ids_original)].copy()
+                        # Apply same prefix to stop_times trip_ids
+                        lr_stop_times["trip_id"] = "complete_lr_" + lr_stop_times["trip_id"].astype(str)
+                        light_rail_stop_times.append(lr_stop_times)
+
+                    # Load calendar for light rail service_ids
+                    lr_service_ids = lr_trips["service_id"].unique()
+                    if calendar_path.exists():
+                        complete_calendar = pd.read_csv(calendar_path, dtype=str)
+                        lr_calendar = complete_calendar[complete_calendar["service_id"].isin(lr_service_ids)]
+                        light_rail_calendar.append(lr_calendar)
+
+                    if calendar_dates_path.exists():
+                        complete_calendar_dates = pd.read_csv(calendar_dates_path, dtype=str)
+                        lr_calendar_dates = complete_calendar_dates[complete_calendar_dates["service_id"].isin(lr_service_ids)]
+                        light_rail_calendar_dates.append(lr_calendar_dates)
+
+                    logger.info(
+                        "gtfs_coverage_light_rail_merged",
+                        mode=coverage_mode,
+                        lr_routes=len(lr_route_ids),
+                        lr_trips=len(lr_trips),
+                        lr_stop_times=len(lr_stop_times) if len(light_rail_stop_times) > 0 else 0
+                    )
+
             logger.info(
                 "gtfs_coverage_mode_loaded",
                 mode=coverage_mode,
@@ -240,6 +329,19 @@ def _load_and_merge_feeds(base_path: Path) -> Dict:
         stops_df = pd.concat([stops_df] + extra_stops, ignore_index=True)
     if extra_routes:
         routes_df = pd.concat([routes_df] + extra_routes, ignore_index=True)
+
+    # Merge light rail trips/stop_times/calendar from complete feed
+    if light_rail_trips:
+        trips_df = pd.concat([trips_df] + light_rail_trips, ignore_index=True)
+    if light_rail_stop_times:
+        stop_times_df = pd.concat([stop_times_df] + light_rail_stop_times, ignore_index=True)
+    if light_rail_calendar:
+        calendar_df = pd.concat([calendar_df] + light_rail_calendar, ignore_index=True)
+    if light_rail_calendar_dates:
+        if calendar_dates_df is not None:
+            calendar_dates_df = pd.concat([calendar_dates_df] + light_rail_calendar_dates, ignore_index=True)
+        else:
+            calendar_dates_df = pd.concat(light_rail_calendar_dates, ignore_index=True)
 
     merged = {
         "agencies": agencies_df,

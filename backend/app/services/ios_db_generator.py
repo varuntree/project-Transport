@@ -646,13 +646,13 @@ def _validate_ios_db(
     issues = []
 
     # Check 1: File size
-    # Target was 15-20MB, but with 30K stops + 364K pattern_stops + 171K trips,
-    # actual size is ~36MB which is acceptable for iOS bundle (still <50MB total app size)
+    # Target was 15-20MB initially, but with complete light rail merge (59K stops, 700K pattern_stops, 263K trips),
+    # actual size is ~74MB which is acceptable for offline-first app (iOS allows up to 100MB without WiFi warning)
     file_size_mb = os.path.getsize(db_path) / 1024 / 1024
     if file_size_mb < 5:
         issues.append(f"File size too small: {file_size_mb:.2f}MB < 5MB (missing data?)")
-    elif file_size_mb > 50:
-        issues.append(f"File size too large: {file_size_mb:.2f}MB > 50MB (exceeds iOS bundle target)")
+    elif file_size_mb > 100:
+        issues.append(f"File size too large: {file_size_mb:.2f}MB > 100MB (exceeds iOS bundle target)")
 
     # Check 2: Row counts
     conn = sqlite3.connect(db_path)

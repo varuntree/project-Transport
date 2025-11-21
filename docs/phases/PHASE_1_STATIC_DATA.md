@@ -55,10 +55,12 @@ curl -H "Authorization: apikey YOUR_API_KEY" \
   https://api.transport.nsw.gov.au/v1/gtfs/schedule/ferries/complete \
   -o ferries.zip
 
-# Light Rail
-curl -H "Authorization: apikey YOUR_API_KEY" \
-  https://api.transport.nsw.gov.au/v1/gtfs/schedule/lightrail/complete \
-  -o lightrail.zip
+# Light Rail - DO NOT DOWNLOAD lightrail feed (incomplete/contaminated)
+# Use complete feed with route_type filtering instead
+# See backend/docs/gtfs-coverage-matrix.md for rationale
+# curl -H "Authorization: apikey YOUR_API_KEY" \
+#   https://api.transport.nsw.gov.au/v1/gtfs/schedule/lightrail/complete \
+#   -o lightrail.zip
 
 # Metro
 curl -H "Authorization: apikey YOUR_API_KEY" \
@@ -108,6 +110,14 @@ gtfs-kit==6.0.0  # GTFS parsing & validation
   - Drop stops outside Sydney region
   - Drop routes with no stops in Sydney
 - [ ] Log stats: # stops, routes, patterns, trips
+
+**Light Rail Special Handling:**
+- **DO NOT** use lightrail feed (incomplete: only L1, contaminated with train platforms)
+- Extract light rail from complete feed: `route_type IN (0, 900)`
+- Filter contamination: Remove stops with "Platform" in name but NOT "Light Rail"
+- Prefix trip_ids to avoid collisions: `complete_lr_{trip_id}`
+- Merge filtered light rail trips/stop_times into pattern extraction
+- Validate: ≥3 routes, ≥6000 trips, ~120 distinct stops, 0 train platform contamination
 
 **3. Pattern Model Implementation**
 (From DATA_ARCHITECTURE.md Section 6)
@@ -268,6 +278,38 @@ CREATE TABLE gtfs_metadata (
 - [ ] Verify PostGIS enabled: `SELECT PostGIS_version();`
 
 **6. GTFS Loader Task (app/tasks/gtfs_static_sync.py)**
+
+**Pre-Load Cleanup (Prevent Stale Data):**
+```python
+def _cleanup_stale_light_rail_data(supabase) -> None:
+    """Delete stale light rail data before loading fresh feed.
+
+    Order: pattern_stops → trips → patterns → routes (reverse FK dependencies)
+    """
+    routes_response = supabase.table("routes") \\
+        .select("route_id") \\
+        .in_("route_type", [0, 900]) \\
+        .execute()
+
+    lr_route_ids = [r["route_id"] for r in routes_response.data]
+
+    if not lr_route_ids:
+        return  # No existing light rail data
+
+    # Delete in reverse FK dependency order
+    # 1. pattern_stops (references patterns)
+    supabase.rpc("delete_pattern_stops_by_route_type", {"route_types": [0, 900]})
+
+    # 2. trips (references patterns)
+    supabase.rpc("delete_trips_by_route_type", {"route_types": [0, 900]})
+
+    # 3. patterns (references routes)
+    supabase.rpc("delete_patterns_by_route_type", {"route_types": [0, 900]})
+
+    # 4. routes (no dependencies)
+    supabase.table("routes").delete().in_("route_type", [0, 900]).execute()
+```
+
 - [ ] Read GTFS CSV files from provided path
 - [ ] Parse & validate (log errors)
 - [ ] Transform to pattern model
@@ -281,11 +323,44 @@ CREATE TABLE gtfs_metadata (
   ```
 - [ ] Insert `gtfs_metadata` (feed_version, dates)
 - [ ] Log stats: `gtfs_load_complete`, `stops_count`, `routes_count`, `patterns_count`, `trips_count`
-- [ ] Validation queries (see DATA_ARCHITECTURE.md Section 6):
-  ```sql
-  SELECT COUNT(*) FROM stops;  -- Expect 10k-25k Sydney
-  SELECT COUNT(*) FROM routes; -- Expect 400-1200
-  SELECT COUNT(*) FROM patterns; -- Expect 2k-10k
+- [ ] Validation queries (hardened thresholds - fail build if below):
+  ```python
+  # General counts
+  total_stops = db.execute("SELECT COUNT(*) FROM stops").fetchone()[0]
+  total_routes = db.execute("SELECT COUNT(*) FROM routes").fetchone()[0]
+  total_patterns = db.execute("SELECT COUNT(*) FROM patterns").fetchone()[0]
+
+  # Light rail validation (CRITICAL)
+  lr_routes = db.execute("SELECT COUNT(*) FROM routes WHERE route_type IN (0, 900)").fetchone()[0]
+  lr_trips = db.execute(
+      "SELECT COUNT(*) FROM trips t "
+      "JOIN patterns p ON t.pattern_id = p.pattern_id "
+      "JOIN routes r ON p.route_id = r.route_id "
+      "WHERE r.route_type IN (0, 900)"
+  ).fetchone()[0]
+  lr_stops = db.execute(
+      "SELECT COUNT(DISTINCT ps.stop_id) FROM pattern_stops ps "
+      "JOIN patterns p ON ps.pattern_id = p.pattern_id "
+      "JOIN routes r ON p.route_id = r.route_id "
+      "WHERE r.route_type IN (0, 900)"
+  ).fetchone()[0]
+
+  # Contamination check
+  lr_contamination = db.execute(
+      "SELECT COUNT(*) FROM pattern_stops ps "
+      "JOIN patterns p ON ps.pattern_id = p.pattern_id "
+      "JOIN routes r ON p.route_id = r.route_id "
+      "JOIN stops s ON ps.stop_id = s.stop_id "
+      "WHERE r.route_type IN (0, 900) "
+      "AND s.stop_name LIKE '%Platform%' "
+      "AND s.stop_name NOT LIKE '%Light Rail%'"
+  ).fetchone()[0]
+
+  # Assertions (fail if violated)
+  assert lr_routes >= 3, f"Light rail routes {lr_routes} < 3"
+  assert lr_trips >= 6000, f"Light rail trips {lr_trips} < 6000"
+  assert lr_stops >= 100, f"Light rail stops {lr_stops} < 100"
+  assert lr_contamination == 0, f"Light rail contaminated with {lr_contamination} train platforms"
   ```
 
 **7. Run GTFS Loader Manually (First Time)**

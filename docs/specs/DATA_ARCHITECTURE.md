@@ -439,6 +439,30 @@ Set `Cache-Control: public, max-age=30, s-maxage=30, stale-while-revalidate=30, 
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### Feed Selection Architecture (MODE_DIRS vs COVERAGE_EXTRA_DIRS)
+
+**Critical Distinction for GTFS-RT Alignment:**
+
+**MODE_DIRS** (Pattern model feeds):
+- Feeds: `sydneytrains`, `metro`, `buses`, `sydneyferries`, `mff`, `complete` (filtered)
+- Provide `trips`/`stop_times` for pattern extraction
+- **MUST verify trip_id alignment with GTFS-RT feeds** - real-time departures depend on matching static trip_ids
+- Light rail: Use `complete` feed filtered by `route_type IN (0, 900)` (lightrail feed incomplete/contaminated)
+
+**COVERAGE_EXTRA_DIRS** (Coverage-only feeds):
+- Feeds: `complete`, `ferries_all`, `nswtrains`, `regionbuses`
+- Provide `agencies`/`stops`/`routes` only (NO `trips`/`stop_times` used)
+- Improve stop coverage (ferry wharves like Davistown, regional stops)
+- No GTFS-RT alignment concerns
+
+**Why exclude lightrail feed from MODE_DIRS (Nov 2024):**
+- lightrail feed returns only L1 (1 route, ~1,300 trips) vs complete feed (6 routes, ~6,750 trips, ~126 stops)
+- lightrail feed contaminated with train platform stops (`route_type=0` Platform stops without "Light Rail" in name)
+- Must filter complete feed by `route_type IN (0, 900)` for light rail patterns
+- Prefix trip_ids to avoid collisions: `complete_lr_{original_trip_id}`
+
+See `backend/docs/gtfs-coverage-matrix.md` for detailed feed selection matrix.
+
 ### Data Filtering Strategy
 
 **Geographic (Sydney Only):**
@@ -570,6 +594,49 @@ SELECT COUNT(*) FROM (
 ) q WHERE prev IS NOT NULL AND offset_secs < prev;
 ```
 
+### Data Cleanup Before Load (Prevent Stale Accumulation)
+
+**Problem:** Batch upserts without cleanup accumulate stale rows when feeds shrink (e.g., lightrail feed had L1/L2/L3, now only L1).
+
+**Solution:** Pre-load cleanup for route_types being reloaded
+
+```python
+def _cleanup_stale_light_rail_data(supabase) -> None:
+    """Delete stale light rail data before loading fresh feed.
+
+    Critical for preventing contamination accumulation when feeds change.
+    Must maintain FK integrity order: pattern_stops → trips → patterns → routes
+    """
+    # Get current light rail route_ids
+    routes_response = supabase.table("routes") \\
+        .select("route_id") \\
+        .in_("route_type", [0, 900]) \\
+        .execute()
+
+    lr_route_ids = [r["route_id"] for r in routes_response.data]
+
+    if not lr_route_ids:
+        return  # No existing light rail data
+
+    # Delete in reverse FK dependency order
+    # 1. pattern_stops (references patterns)
+    supabase.rpc("delete_pattern_stops_by_route_type", {"route_types": [0, 900]})
+
+    # 2. trips (references patterns)
+    supabase.rpc("delete_trips_by_route_type", {"route_types": [0, 900]})
+
+    # 3. patterns (references routes)
+    supabase.rpc("delete_patterns_by_route_type", {"route_types": [0, 900]})
+
+    # 4. routes (no dependencies)
+    supabase.table("routes").delete().in_("route_type", [0, 900]).execute()
+```
+
+**When to use:**
+- Before loading MODE_DIRS feeds (pattern model data)
+- Especially for route_types with known feed issues (light rail)
+- Not needed for coverage-only feeds (simple upserts)
+
 ### Size Estimates
 
 | Component              | Size        | Notes                                    |
@@ -594,6 +661,49 @@ SELECT COUNT(*) FROM (
 - Must support geospatial queries (nearby stops)
 - Optimize for read-heavy workload (80% reads, 20% writes)
 - iOS app queries frequently (minimize latency)
+
+### GTFS Load Validation Thresholds
+
+**Minimum counts per mode (fail build if below):**
+
+| Mode | route_type | min_routes | min_trips | min_distinct_stops |
+|------|-----------|-----------|-----------|-------------------|
+| Light Rail | 0, 900 | 3 | 6000 | 100 |
+| Sydney Trains | 2 | 10 | 15000 | 300 |
+| Metro | 1 | 1 | 2000 | 13 |
+| Buses | 3 | 200 | 40000 | 3000 |
+| Ferries | 4 | 5 | 500 | 30 |
+
+**Contamination checks:**
+- Light rail (`route_type` 0/900): Pattern_stops with `stop_name LIKE '%Platform%' AND stop_name NOT LIKE '%Light Rail%'` must be 0
+- Train (`route_type` 2): No light rail stops (check stop_name patterns)
+
+**Feed delta logging:**
+```python
+# Before load
+old_counts = get_route_type_counts(db)
+
+# After load
+new_counts = get_route_type_counts(db)
+
+for route_type in [0, 1, 2, 3, 4, 900]:
+    old = old_counts.get(route_type, 0)
+    new = new_counts.get(route_type, 0)
+    delta_pct = ((new - old) / old * 100) if old > 0 else 0
+
+    logger.info("route_type_delta",
+                route_type=route_type,
+                old=old, new=new, delta_pct=delta_pct)
+
+    if delta_pct < -10:
+        logger.error("coverage_regression",
+                     route_type=route_type, delta_pct=delta_pct)
+```
+
+**Rationale:**
+- Prevents silent data loss when feeds change
+- Catches contamination issues (Nov 2024: light rail had 116 train platforms)
+- Alerts on >10% coverage drops for regression detection
 
 ### Preliminary Schema (Needs Oracle Review)
 
