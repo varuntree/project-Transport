@@ -13,7 +13,7 @@ from supabase import Client
 logger = get_logger(__name__)
 router = APIRouter()
 
-VAR_DIR = Path(os.getenv("VAR_DIR", Path(__file__).resolve().parent.parent.parent / "var")).resolve()
+VAR_DIR = Path(os.getenv("VAR_DIR", Path(__file__).resolve().parents[3] / "var")).resolve()
 GTFS_DB_PATH = VAR_DIR / "data" / "gtfs.db"
 
 @router.get("/version")
