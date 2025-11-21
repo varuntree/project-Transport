@@ -36,7 +36,26 @@ final class StopAnnotationView: MKMarkerAnnotationView {
         glyphImage = UIImage(systemName: stopAnnotation.transportIcon)
 
         // Accessibility: descriptive label for VoiceOver
-        accessibilityLabel = "\(stopAnnotation.stop.stopName), \(stopAnnotation.subtitle ?? "Stop")"
+        let transportMode = getTransportModeName(routeType: stopAnnotation.stop.primaryRouteType)
+        accessibilityLabel = "\(stopAnnotation.stop.stopName), \(transportMode) stop"
+        accessibilityHint = "Tap to view departures"
+
+        // Semantic trait for better VoiceOver experience
+        accessibilityTraits = .button
+    }
+
+    /// Convert route type to human-readable transport mode
+    private func getTransportModeName(routeType: Int?) -> String {
+        guard let routeType = routeType else { return "Transport" }
+
+        switch routeType {
+        case 2: return "Train"
+        case 401, 1: return "Metro"
+        case 0, 900: return "Light Rail"
+        case 4: return "Ferry"
+        case 3, 700, 712, 714: return "Bus"
+        default: return "Transport"
+        }
     }
 
     override func prepareForReuse() {

@@ -16,11 +16,16 @@ struct StopDetailsDrawer: View {
                 header
                     .padding(.top, 20) // Space for grabber
                     .padding(.bottom, 12)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Stop details for \(stop.stopName)")
+                    .accessibilityHint("Swipe up to view more departures")
 
                 // Content - full departure list (iOS 16 compatible, no detent detection)
                 fullContent
+                    .accessibilityElement(children: .contain)
             }
         }
+        .accessibilityElement(children: .contain)
     }
 
     // MARK: - Header (Collapsed State)
@@ -92,6 +97,7 @@ struct StopDetailsDrawer: View {
             Image(systemName: "clock.badge.xmark")
                 .font(.largeTitle)
                 .foregroundColor(.secondary)
+                .accessibilityHidden(true)
 
             Text("No upcoming departures")
                 .font(.headline)
@@ -104,6 +110,8 @@ struct StopDetailsDrawer: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 40)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("No upcoming departures. No services scheduled at this time.")
     }
 
     // MARK: - Helpers
@@ -174,6 +182,17 @@ struct DepartureCompactRow: View {
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityText)
+    }
+
+    /// Descriptive accessibility label for VoiceOver
+    private var accessibilityText: String {
+        var text = "\(departure.routeShortName) to \(departure.headsign), departing in \(departure.minutesUntilText) at \(departure.departureTime), scheduled"
+        if departure.wheelchairAccessible == 1 {
+            text += ", wheelchair accessible"
+        }
+        return text
     }
 }
 

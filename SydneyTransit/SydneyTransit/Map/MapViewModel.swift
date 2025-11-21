@@ -2,9 +2,13 @@ import Foundation
 import SwiftUI
 import MapKit
 import Logging
+import UIKit
 
 @MainActor
 class MapViewModel: NSObject, ObservableObject {
+    // Haptic feedback generators
+    private let lightImpact = UIImpactFeedbackGenerator(style: .light)
+    private let mediumImpact = UIImpactFeedbackGenerator(style: .medium)
     @Published var annotations: [StopAnnotation] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
@@ -110,7 +114,31 @@ class MapViewModel: NSObject, ObservableObject {
 
     /// Select stop and load departures for drawer
     func selectStop(_ stop: Stop) {
+        // Haptic feedback on pin tap
+        lightImpact.impactOccurred()
+
         selectedStop = stop
+
+        // Log analytics event (no PII)
+        Logger.map.info(
+            "map_stop_selected",
+            metadata: .from([
+                "stop_id": stop.sid,
+                "transport_mode": stop.primaryRouteType ?? -1
+            ])
+        )
+
+        // Trigger drawer open with medium haptic
+        mediumImpact.impactOccurred()
+
+        Logger.map.info(
+            "drawer_opened",
+            metadata: .from([
+                "stop_id": stop.sid,
+                "detent_state": "collapsed" // Initial state
+            ])
+        )
+
         Task {
             await loadDepartures(for: stop)
         }
@@ -141,11 +169,10 @@ class MapViewModel: NSObject, ObservableObject {
             departures = fetchedDepartures
 
             Logger.map.info(
-                "drawer_departures_loaded",
+                "offline_departures_shown",
                 metadata: .from([
                     "stop_id": stopId,
-                    "stop_name": stop.stopName,
-                    "count": fetchedDepartures.count
+                    "departure_count": fetchedDepartures.count
                 ])
             )
         } catch {

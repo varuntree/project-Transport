@@ -301,6 +301,12 @@ class DatabaseManager {
         let startTime = Date()
 
         let stops = try read { db in
+            // Verify index usage for performance (one-time check)
+            if !Self.verifiedStopsIndexes {
+                verifyStopsIndexes(db)
+                Self.verifiedStopsIndexes = true
+            }
+
             let sql = """
                 SELECT *
                 FROM stops
@@ -318,6 +324,17 @@ class DatabaseManager {
 
         let durationMs = Int(Date().timeIntervalSince(startTime) * 1000)
 
+        // Performance warning if query exceeds target
+        if durationMs > 100 {
+            Logger.database.warning(
+                "map_stops_query_slow",
+                metadata: .from([
+                    "duration_ms": durationMs,
+                    "threshold_ms": 100
+                ])
+            )
+        }
+
         Logger.database.info(
             "map_stops_loaded",
             metadata: .from([
@@ -328,5 +345,44 @@ class DatabaseManager {
         )
 
         return stops
+    }
+
+    private static var verifiedStopsIndexes = false
+
+    /// Verify that spatial indexes exist for stops table
+    private func verifyStopsIndexes(_ db: Database) {
+        do {
+            let indexes = try Row.fetchAll(db, sql: "PRAGMA index_list('stops')")
+            let indexNames = indexes.compactMap { row -> String? in
+                row["name"]
+            }
+
+            Logger.database.info(
+                "stops_indexes_verified",
+                metadata: .from([
+                    "indexes": indexNames.joined(separator: ", ")
+                ])
+            )
+
+            // Check for lat/lon indexes (may not exist in current schema)
+            let hasLatIndex = indexNames.contains { $0.contains("lat") }
+            let hasLonIndex = indexNames.contains { $0.contains("lon") }
+
+            if !hasLatIndex || !hasLonIndex {
+                Logger.database.warning(
+                    "stops_spatial_index_missing",
+                    metadata: .from([
+                        "note": "Consider adding indexes on stop_lat and stop_lon for better performance"
+                    ])
+                )
+            }
+        } catch {
+            Logger.database.error(
+                "stops_index_verification_failed",
+                metadata: .from([
+                    "error": error.localizedDescription
+                ])
+            )
+        }
     }
 }
