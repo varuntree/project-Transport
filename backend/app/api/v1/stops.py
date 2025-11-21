@@ -102,8 +102,39 @@ async def search_stops(
         result = supabase.rpc("exec_raw_sql", {"query": query}).execute()
         stops = result.data or []
 
+        # Log route_type distribution for multi-modal coverage validation
+        route_type_distribution = {}
+        if stops:
+            for stop in stops:
+                # Query route_type for this stop
+                route_types_query = f"""
+                    SELECT DISTINCT r.route_type
+                    FROM patterns p
+                    JOIN routes r ON p.route_id = r.route_id
+                    JOIN pattern_stops ps ON p.pattern_id = ps.pattern_id
+                    WHERE ps.stop_id = '{stop["stop_id"]}'
+                """
+                try:
+                    route_types = supabase.rpc("exec_raw_sql", {"query": route_types_query}).execute()
+
+                    if route_types.data:
+                        for rt_row in route_types.data:
+                            route_type = rt_row.get("route_type")
+                            if route_type is not None:
+                                route_type_distribution[route_type] = route_type_distribution.get(route_type, 0) + 1
+                except Exception as e:
+                    # Log error but don't fail search
+                    logger.warning("route_type_query_failed", stop_id=stop["stop_id"], error=str(e))
+
         duration_ms = int((time.time() - start_time) * 1000)
         logger.info("stops_search", query=q, result_count=len(stops), duration_ms=duration_ms)
+
+        # Log route type distribution separately for modal coverage analysis
+        if route_type_distribution:
+            logger.info("search_results_modality",
+                       query=q,
+                       total_results=len(stops),
+                       route_type_distribution=route_type_distribution)
 
         return {
             "data": {
