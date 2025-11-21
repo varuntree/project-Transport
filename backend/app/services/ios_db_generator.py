@@ -329,6 +329,11 @@ def _create_schema(conn: sqlite3.Connection):
         )
     """)
 
+    # Optimise sid + offset lookup for offline departures query
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pattern_stops_sid_offset ON pattern_stops (sid, departure_offset_secs)"
+    )
+
     conn.execute("""
         CREATE TABLE trips (
             trip_id TEXT PRIMARY KEY,

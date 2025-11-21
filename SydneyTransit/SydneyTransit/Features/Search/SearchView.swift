@@ -105,11 +105,14 @@ struct SearchView: View {
 
             let duration = Date().timeIntervalSince(startTime) * 1000 // ms
 
-            Logger.database.info("search_completed", metadata: [
-                "query": "\(query)",
-                "results_count": "\(results.count)",
-                "duration_ms": "\(Int(duration))"
-            ])
+            Logger.database.info(
+                "search_completed",
+                metadata: .from([
+                    "query": query,
+                    "results_count": results.count,
+                    "duration_ms": Int(duration)
+                ])
+            )
 
             // Log route type distribution for multi-modal coverage validation
             let routeTypeCounts = Dictionary(grouping: results, by: { $0.primaryRouteType })
@@ -120,20 +123,26 @@ struct SearchView: View {
                 .sorted()
                 .joined(separator: ",")
 
-            Logger.database.info("search_results_ios", metadata: [
-                "query": "\(query)",
-                "total": "\(results.count)",
-                "route_types": "\(routeTypeStr)"
-            ])
+            Logger.database.info(
+                "search_results_ios",
+                metadata: .from([
+                    "query": query,
+                    "total": results.count,
+                    "route_types": routeTypeStr
+                ])
+            )
 
             searchResults = results
             isLoading = false
 
         } catch {
-            Logger.database.error("search_failed", metadata: [
-                "query": "\(query)",
-                "error": "\(error.localizedDescription)"
-            ])
+            Logger.database.error(
+                "search_failed",
+                metadata: .from([
+                    "query": query,
+                    "error": error.localizedDescription
+                ])
+            )
 
             errorMessage = "Search failed: \(error.localizedDescription)"
             searchResults = []

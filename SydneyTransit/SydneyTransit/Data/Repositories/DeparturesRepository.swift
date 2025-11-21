@@ -16,10 +16,12 @@ protocol DeparturesRepository {
 
 class DeparturesRepositoryImpl: DeparturesRepository {
     private let apiClient: APIClient
+    private let offlineLimit: Int
     private let logger = Logger.app
 
-    init(apiClient: APIClient = .shared) {
+    init(apiClient: APIClient = .shared, offlineLimit: Int = 20) {
         self.apiClient = apiClient
+        self.offlineLimit = offlineLimit
     }
 
     func fetchDepartures(stopId: String) async throws -> [Departure] {
@@ -43,18 +45,43 @@ class DeparturesRepositoryImpl: DeparturesRepository {
             }
 
             // API returned empty - fallback to offline
-            logger.info("API returned empty departures, using offline data", metadata: ["stop_id": "\(stopId)"])
+            logger.info(
+                "API returned empty departures, using offline data",
+                metadata: .from(["stop_id": stopId])
+            )
 
         } catch {
             // API failed - fallback to offline
-            logger.warning("API request failed, using offline data", metadata: [
-                "error": "\(error.localizedDescription)",
-                "stop_id": "\(stopId)"
-            ])
+            logger.warning(
+                "API request failed, using offline data",
+                metadata: .from([
+                    "error": error.localizedDescription,
+                    "stop_id": stopId
+                ])
+            )
         }
 
         // Offline fallback: query bundled GRDB
-        return try DatabaseManager.shared.getDepartures(stopId: stopId)
+        do {
+            let departures = try DatabaseManager.shared.getDepartures(stopId: stopId, limit: offlineLimit)
+            logger.info(
+                "offline_departures_loaded",
+                metadata: .from([
+                    "stop_id": stopId,
+                    "count": departures.count
+                ])
+            )
+            return departures
+        } catch {
+            logger.warning(
+                "offline_departures_failed",
+                metadata: .from([
+                    "stop_id": stopId,
+                    "error": error.localizedDescription
+                ])
+            )
+            return []
+        }
     }
 
     func fetchDeparturesPage(stopId: String, timeSecs: Int?, direction: String, limit: Int) async throws -> DeparturesPage {

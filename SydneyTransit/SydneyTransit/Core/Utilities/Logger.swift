@@ -10,3 +10,12 @@ extension Logger {
     /// Database logger instance
     static let database = Logger(label: "com.sydneytransit.database")
 }
+
+extension Logger.Metadata {
+    /// Convenience to build metadata from string-convertible values without verbose `.stringConvertible` calls.
+    static func from(_ values: [String: CustomStringConvertible]) -> Logger.Metadata {
+        values.reduce(into: Logger.Metadata()) { result, entry in
+            result[entry.key] = .stringConvertible(entry.value)
+        }
+    }
+}

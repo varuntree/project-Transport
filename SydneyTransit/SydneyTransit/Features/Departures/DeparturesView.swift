@@ -16,10 +16,13 @@ private struct OccupancyIconView: View {
     init(occupancy: (symbolName: String, color: Color, label: String), departure: Departure) {
         self.occupancy = occupancy
         self.departure = departure
-        Logger.app.debug("Occupancy check", metadata: [
-            "trip_id": "\(departure.tripId)",
-            "occupancy_status": "\(departure.occupancy_status?.description ?? "nil")"
-        ])
+        Logger.app.debug(
+            "Occupancy check",
+            metadata: .from([
+                "trip_id": departure.tripId,
+                "occupancy_status": departure.occupancy_status?.description ?? "nil"
+            ])
+        )
     }
 
     var body: some View {
@@ -139,19 +142,25 @@ struct DeparturesView: View {
                     let gtfsStopId = try stop.getStopID()
 
                     // Enhanced diagnostic logging
-                    Logger.database.info("departures_request", metadata: [
-                        "sid": "\(stop.sid)",
-                        "stop_id": gtfsStopId ?? "nil",
-                        "stop_name": "\(stop.stopName)"
-                    ])
+                    Logger.database.info(
+                        "departures_request",
+                        metadata: .from([
+                            "sid": stop.sid,
+                            "stop_id": gtfsStopId ?? "nil",
+                            "stop_name": stop.stopName
+                        ])
+                    )
 
                     guard let stopID = gtfsStopId else {
                         // Handle missing stop_id gracefully
                         viewModel.errorMessage = "Unable to fetch departures: stop ID mapping missing"
-                        Logger.database.error("departures_missing_stop_id", metadata: [
-                            "sid": "\(stop.sid)",
-                            "stop_name": "\(stop.stopName)"
-                        ])
+                        Logger.database.error(
+                            "departures_missing_stop_id",
+                            metadata: .from([
+                                "sid": stop.sid,
+                                "stop_name": stop.stopName
+                            ])
+                        )
                         return
                     }
 
@@ -160,10 +169,13 @@ struct DeparturesView: View {
                     hasLoadedInitial = true  // Mark initial load complete
                     viewModel.startAutoRefresh(stopId: stopID)
                 } catch {
-                    Logger.database.error("Failed to get stop_id", metadata: [
-                        "sid": "\(stop.sid)",
-                        "error": "\(error.localizedDescription)"
-                    ])
+                    Logger.database.error(
+                        "Failed to get stop_id",
+                        metadata: .from([
+                            "sid": stop.sid,
+                            "error": error.localizedDescription
+                        ])
+                    )
                     viewModel.errorMessage = "Failed to load stop information"
                 }
             }

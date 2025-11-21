@@ -55,7 +55,7 @@ class DeparturesViewModel: ObservableObject {
             errorMessage = "No internet connection"
         } catch let error as URLError where error.code == .timedOut {
             errorMessage = "Request timed out. Please try again."
-        } catch let error as DecodingError {
+        } catch is DecodingError {
             errorMessage = "Invalid response from server"
         } catch let apiError as APIError {
             // Handle APIError with specific status codes

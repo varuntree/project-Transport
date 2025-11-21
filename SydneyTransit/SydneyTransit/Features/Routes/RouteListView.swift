@@ -137,18 +137,22 @@ struct RouteListView: View {
 
             let duration = Date().timeIntervalSince(startTime) * 1000 // ms
 
-            Logger.database.info("routes_loaded", metadata: [
-                "total_count": "\(routes.count)",
-                "types_count": "\(routesByType.keys.count)",
-                "duration_ms": "\(Int(duration))"
-            ])
+            Logger.database.info(
+                "routes_loaded",
+                metadata: .from([
+                    "total_count": routes.count,
+                    "types_count": routesByType.keys.count,
+                    "duration_ms": Int(duration)
+                ])
+            )
 
             isLoading = false
 
         } catch {
-            Logger.database.error("routes_load_failed", metadata: [
-                "error": "\(error.localizedDescription)"
-            ])
+            Logger.database.error(
+                "routes_load_failed",
+                metadata: .from(["error": error.localizedDescription])
+            )
 
             errorMessage = "Failed to load routes: \(error.localizedDescription)"
             isLoading = false

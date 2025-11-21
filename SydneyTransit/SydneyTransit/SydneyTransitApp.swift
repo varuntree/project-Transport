@@ -8,9 +8,7 @@ struct SydneyTransitApp: App {
         Logger.app.info("App launched")
 
         // Verify config loaded
-        Logger.app.info("Configuration loaded", metadata: [
-            "api_base_url": "\(Config.apiBaseURL)"
-        ])
+        Logger.app.info("Configuration loaded", metadata: .from(["api_base_url": Config.apiBaseURL]))
     }
 
     var body: some Scene {

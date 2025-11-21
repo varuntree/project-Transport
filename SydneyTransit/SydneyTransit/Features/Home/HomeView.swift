@@ -92,7 +92,7 @@ struct HomeView: View {
                 return
             }
 
-            Logger.network.info("Fetching backend status", metadata: ["url": "\(url)"])
+            Logger.network.info("Fetching backend status", metadata: .from(["url": url]))
 
             let (data, response) = try await URLSession.shared.data(from: url)
 
@@ -108,14 +108,17 @@ struct HomeView: View {
                let dataDict = json["data"] as? [String: Any],
                let message = dataDict["message"] as? String {
                 apiStatus = message // "Sydney Transit API"
-                Logger.network.info("Backend status fetched", metadata: ["message": "\(message)"])
+                Logger.network.info("Backend status fetched", metadata: .from(["message": message]))
             } else {
                 apiStatus = "Invalid response format"
             }
 
         } catch {
             apiStatus = "Backend unreachable: \(error.localizedDescription)"
-            Logger.network.error("Failed to fetch backend status", metadata: ["error": "\(error)"])
+            Logger.network.error(
+                "Failed to fetch backend status",
+                metadata: .from(["error": error.localizedDescription])
+            )
         }
 
         isLoading = false
