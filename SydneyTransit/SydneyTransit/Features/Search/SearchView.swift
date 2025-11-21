@@ -111,6 +111,21 @@ struct SearchView: View {
                 "duration_ms": "\(Int(duration))"
             ])
 
+            // Log route type distribution for multi-modal coverage validation
+            let routeTypeCounts = Dictionary(grouping: results, by: { $0.primaryRouteType })
+                .mapValues { $0.count }
+
+            let routeTypeStr = routeTypeCounts
+                .map { "\($0.key.map(String.init) ?? "nil"):\($0.value)" }
+                .sorted()
+                .joined(separator: ",")
+
+            Logger.database.info("search_results_ios", metadata: [
+                "query": "\(query)",
+                "total": "\(results.count)",
+                "route_types": "\(routeTypeStr)"
+            ])
+
             searchResults = results
             isLoading = false
 

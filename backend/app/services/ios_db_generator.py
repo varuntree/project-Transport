@@ -406,6 +406,14 @@ def _insert_data(
     counts["dict_stop"] = len(stop_dict_rows)
     logger.info("ios_db_table_inserted", table="dict_stop", rows=len(stop_dict_rows))
 
+    # Validate dict_stop completeness
+    stops_count = len(data["stops"])
+    dict_stop_count = len(stop_dict_rows)
+    if stops_count != dict_stop_count:
+        logger.error("dict_stop_validation_failed", stops_count=stops_count, dict_stop_count=dict_stop_count)
+        raise ValueError(f"dict_stop validation failed: {stops_count} stops but {dict_stop_count} dict_stop entries")
+    logger.info("dict_stop_validated", stops_count=stops_count, dict_stop_count=dict_stop_count)
+
     route_dict_rows = [(v, k) for k, v in dictionaries["route_dict"].items()]
     conn.executemany("INSERT INTO dict_route VALUES (?, ?)", route_dict_rows)
     counts["dict_route"] = len(route_dict_rows)

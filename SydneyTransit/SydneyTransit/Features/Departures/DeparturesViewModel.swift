@@ -57,15 +57,21 @@ class DeparturesViewModel: ObservableObject {
             errorMessage = "Request timed out. Please try again."
         } catch let error as DecodingError {
             errorMessage = "Invalid response from server"
-        } catch {
-            let errorDesc = error.localizedDescription
-            if errorDesc.contains("404") {
-                errorMessage = "Stop not found in backend"
-            } else if errorDesc.contains("500") {
-                errorMessage = "Server error. Please try again later."
+        } catch let apiError as APIError {
+            // Handle APIError with specific status codes
+            if case .serverError(let statusCode, let message) = apiError {
+                if statusCode == 404 {
+                    errorMessage = "This stop is not in our database"
+                } else if statusCode >= 500 {
+                    errorMessage = "Server error. Please try again later."
+                } else {
+                    errorMessage = message ?? "Failed to load departures"
+                }
             } else {
-                errorMessage = "Failed to load departures: \(errorDesc)"
+                errorMessage = apiError.localizedDescription
             }
+        } catch {
+            errorMessage = "Failed to load departures: \(error.localizedDescription)"
         }
 
         isLoading = false

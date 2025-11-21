@@ -136,23 +136,29 @@ struct DeparturesView: View {
             Task {
                 // Get GTFS stop_id from dict_stop table
                 do {
-                    if let gtfsStopId = try stop.getStopID() {
-                        stopId = gtfsStopId
-                        Logger.database.info("Fetching departures", metadata: [
+                    let gtfsStopId = try stop.getStopID()
+
+                    // Enhanced diagnostic logging
+                    Logger.database.info("departures_request", metadata: [
+                        "sid": "\(stop.sid)",
+                        "stop_id": gtfsStopId ?? "nil",
+                        "stop_name": "\(stop.stopName)"
+                    ])
+
+                    guard let stopID = gtfsStopId else {
+                        // Handle missing stop_id gracefully
+                        viewModel.errorMessage = "Unable to fetch departures: stop ID mapping missing"
+                        Logger.database.error("departures_missing_stop_id", metadata: [
                             "sid": "\(stop.sid)",
-                            "stop_id": "\(gtfsStopId)",
                             "stop_name": "\(stop.stopName)"
                         ])
-                        await viewModel.loadInitialDepartures(stopId: gtfsStopId)
-                        hasLoadedInitial = true  // Mark initial load complete
-                        viewModel.startAutoRefresh(stopId: gtfsStopId)
-                    } else {
-                        Logger.database.error("No stop_id mapping found", metadata: [
-                            "sid": "\(stop.sid)",
-                            "stop_name": "\(stop.stopName)"
-                        ])
-                        viewModel.errorMessage = "Stop ID mapping not found"
+                        return
                     }
+
+                    stopId = stopID
+                    await viewModel.loadInitialDepartures(stopId: stopID)
+                    hasLoadedInitial = true  // Mark initial load complete
+                    viewModel.startAutoRefresh(stopId: stopID)
                 } catch {
                     Logger.database.error("Failed to get stop_id", metadata: [
                         "sid": "\(stop.sid)",
