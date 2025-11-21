@@ -344,11 +344,14 @@ def _apply_sydney_filter(data: Dict) -> Dict:
     orphan_stops = sydney_stops[(sydney_stops['location_type'] == '0') & sydney_stops['parent_station'].isna()]
     other_stops = sydney_stops[~sydney_stops['location_type'].isin(['0', '1'])]
 
-    # Deduplicate ONLY parent stations (generic stations appear in multiple feeds)
+    # Deduplicate within each category (same stop_id can appear in multiple feeds)
     parent_stations_dedup = parent_stations.drop_duplicates(subset=['stop_id'], keep='first')
+    child_stops_dedup = child_stops.drop_duplicates(subset=['stop_id'], keep='first')
+    orphan_stops_dedup = orphan_stops.drop_duplicates(subset=['stop_id'], keep='first')
+    other_stops_dedup = other_stops.drop_duplicates(subset=['stop_id'], keep='first')
 
-    # Merge: deduped parents + ALL children/orphans/other
-    sydney_stops_dedup = pd.concat([parent_stations_dedup, child_stops, orphan_stops, other_stops], ignore_index=True)
+    # Merge: deduped categories preserving hierarchy
+    sydney_stops_dedup = pd.concat([parent_stations_dedup, child_stops_dedup, orphan_stops_dedup, other_stops_dedup], ignore_index=True)
 
     logger.info(
         "stops_smart_deduplication",
@@ -356,9 +359,12 @@ def _apply_sydney_filter(data: Dict) -> Dict:
         stops_after=len(sydney_stops_dedup),
         parent_stations_before=len(parent_stations),
         parent_stations_after=len(parent_stations_dedup),
-        child_stops=len(child_stops),
-        orphan_stops=len(orphan_stops),
-        other_stops=len(other_stops)
+        child_stops_before=len(child_stops),
+        child_stops_after=len(child_stops_dedup),
+        orphan_stops_before=len(orphan_stops),
+        orphan_stops_after=len(orphan_stops_dedup),
+        other_stops_before=len(other_stops),
+        other_stops_after=len(other_stops_dedup)
     )
 
     # Deduplicate agencies (agencies appear across multiple feeds and coverage feeds)
