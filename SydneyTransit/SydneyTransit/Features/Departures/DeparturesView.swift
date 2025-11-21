@@ -135,6 +135,15 @@ struct DeparturesView: View {
             }
         }
         .navigationTitle("Departures")
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                NavigationLink {
+                    MapView(selectedStop: stop)
+                } label: {
+                    Label("View on Map", systemImage: "map")
+                }
+            }
+        }
         .onAppear {
             Task {
                 // Get GTFS stop_id from dict_stop table

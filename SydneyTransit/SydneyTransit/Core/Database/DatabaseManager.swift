@@ -279,4 +279,54 @@ class DatabaseManager {
             return departures
         }
     }
+
+    // MARK: - Map Region Queries
+
+    /// Get stops within a geographic bounding box (for map region loading)
+    /// Uses spatial filtering to avoid loading all 30K stops at once
+    /// - Parameters:
+    ///   - minLat: Minimum latitude
+    ///   - maxLat: Maximum latitude
+    ///   - minLon: Minimum longitude
+    ///   - maxLon: Maximum longitude
+    ///   - limit: Maximum number of stops to return (default 200 for performance)
+    /// - Returns: Array of stops within bounding box
+    func getStopsInRegion(
+        minLat: Double,
+        maxLat: Double,
+        minLon: Double,
+        maxLon: Double,
+        limit: Int = 200
+    ) throws -> [Stop] {
+        let startTime = Date()
+
+        let stops = try read { db in
+            let sql = """
+                SELECT *
+                FROM stops
+                WHERE stop_lat >= ? AND stop_lat <= ?
+                  AND stop_lon >= ? AND stop_lon <= ?
+                LIMIT ?
+            """
+
+            return try Stop.fetchAll(
+                db,
+                sql: sql,
+                arguments: [minLat, maxLat, minLon, maxLon, limit]
+            )
+        }
+
+        let durationMs = Int(Date().timeIntervalSince(startTime) * 1000)
+
+        Logger.database.info(
+            "map_stops_loaded",
+            metadata: .from([
+                "count": stops.count,
+                "duration_ms": durationMs,
+                "bbox": "(\(minLat),\(minLon)) to (\(maxLat),\(maxLon))"
+            ])
+        )
+
+        return stops
+    }
 }

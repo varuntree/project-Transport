@@ -50,6 +50,18 @@ struct SearchView: View {
                                         .foregroundColor(.secondary)
                                 }
                             }
+
+                            Spacer()
+
+                            // View on Map button
+                            NavigationLink {
+                                MapView(selectedStop: stop)
+                            } label: {
+                                Image(systemName: "map")
+                                    .foregroundColor(.blue)
+                                    .imageScale(.medium)
+                            }
+                            .buttonStyle(PlainButtonStyle())
                         }
                         .padding(.vertical, 4)
                     }

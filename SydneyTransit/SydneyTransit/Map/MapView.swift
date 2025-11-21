@@ -199,37 +199,6 @@ struct MapViewRepresentable: UIViewRepresentable {
     }
 }
 
-// MARK: - Extensions for iOS 16.4+ Compatibility
-
-extension View {
-    @ViewBuilder
-    func safePresentationBackgroundInteraction() -> some View {
-        if #available(iOS 16.4, *) {
-            self.presentationBackgroundInteraction(.enabled(upThrough: .medium))
-        } else {
-            self
-        }
-    }
-
-    @ViewBuilder
-    func safePresentationBackground() -> some View {
-        if #available(iOS 16.4, *) {
-            self.presentationBackground(.ultraThinMaterial)
-        } else {
-            self
-        }
-    }
-
-    @ViewBuilder
-    func safePresentationCornerRadius() -> some View {
-        if #available(iOS 16.4, *) {
-            self.presentationCornerRadius(16)
-        } else {
-            self
-        }
-    }
-}
-
 #Preview {
     NavigationStack {
         MapView()
