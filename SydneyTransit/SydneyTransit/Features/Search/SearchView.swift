@@ -1,7 +1,30 @@
 import SwiftUI
 import Logging
 
+enum SearchMode: String, CaseIterable {
+    case all = "All"
+    case train = "Train"
+    case bus = "Bus"
+    case ferry = "Ferry"
+    case lightRail = "Light Rail"
+    case metro = "Metro"
+
+    var displayName: String { self.rawValue }
+
+    var routeTypes: [Int]? {
+        switch self {
+        case .all: return nil
+        case .train: return [2]
+        case .bus: return [3, 700, 712, 714]
+        case .ferry: return [4]
+        case .lightRail: return [900]
+        case .metro: return [1, 401]
+        }
+    }
+}
+
 struct SearchView: View {
+    @State private var selectedMode: SearchMode = .all
     @State private var searchQuery: String = ""
     @State private var searchResults: [Stop] = []
     @State private var isLoading: Bool = false
@@ -9,8 +32,18 @@ struct SearchView: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        List {
-            if isLoading {
+        VStack(spacing: 0) {
+            Picker("Transport Mode", selection: $selectedMode) {
+                ForEach(SearchMode.allCases, id: \.self) { mode in
+                    Text(mode.displayName).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal)
+            .padding(.top, 8)
+
+            List {
+                if isLoading {
                 HStack {
                     Spacer()
                     ProgressView()
@@ -67,6 +100,7 @@ struct SearchView: View {
                     }
                 }
             }
+            }
         }
         .navigationTitle("Search Stops")
         .searchable(text: $searchQuery, prompt: "Stop name or code")
@@ -102,6 +136,19 @@ struct SearchView: View {
 
                 // Perform search
                 await performSearch(query: newValue)
+            }
+        }
+        .onChange(of: selectedMode) { newMode in
+            // Cancel existing search task
+            searchTask?.cancel()
+
+            // Trigger search with debounce if query not empty
+            if !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty {
+                searchTask = Task {
+                    try? await Task.sleep(nanoseconds: 300_000_000) // 300ms debounce
+                    guard !Task.isCancelled else { return }
+                    await performSearch(query: searchQuery)
+                }
             }
         }
     }
