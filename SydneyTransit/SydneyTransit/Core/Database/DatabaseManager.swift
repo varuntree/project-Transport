@@ -347,6 +347,78 @@ class DatabaseManager {
         return stops
     }
 
+    // MARK: - Nearby Stops (Phase 1.5)
+
+    /// Get stops near a specific location sorted by distance
+    /// Uses Haversine formula for distance calculation with bounding box optimization
+    /// - Parameters:
+    ///   - latitude: Center latitude
+    ///   - longitude: Center longitude
+    ///   - radiusMeters: Search radius in meters (default 500)
+    ///   - limit: Maximum stops to return (default 20)
+    /// - Returns: Array of (Stop, distanceInMeters) sorted by distance
+    func getNearbyStops(
+        latitude: Double,
+        longitude: Double,
+        radiusMeters: Double = 500,
+        limit: Int = 20
+    ) throws -> [(Stop, Double)] {
+        let startTime = Date()
+
+        let results = try read { db in
+            // Optimization: Pre-filter with simple bounding box to avoid Haversine on all rows
+            // 1 degree latitude is approx 111km
+            // 1 degree longitude at Sydney (~34S) is approx 92km
+            let latDelta = (radiusMeters / 111000.0) * 1.2 // 20% buffer
+            let lonDelta = (radiusMeters / 92000.0) * 1.2
+
+            let minLat = latitude - latDelta
+            let maxLat = latitude + latDelta
+            let minLon = longitude - lonDelta
+            let maxLon = longitude + lonDelta
+
+            let sql = """
+            SELECT *,
+                   (6371000 * acos(
+                       cos(radians(?)) * cos(radians(stop_lat)) *
+                       cos(radians(stop_lon) - radians(?)) +
+                       sin(radians(?)) * sin(radians(stop_lat))
+                   )) AS distance
+            FROM stops
+            WHERE stop_lat BETWEEN ? AND ?
+              AND stop_lon BETWEEN ? AND ?
+            HAVING distance < ?
+            ORDER BY distance ASC
+            LIMIT ?
+            """
+
+            let rows = try Row.fetchAll(
+                db,
+                sql: sql,
+                arguments: [latitude, longitude, latitude, minLat, maxLat, minLon, maxLon, radiusMeters, limit]
+            )
+            
+            return try rows.map { row in
+                let stop = try Stop(row: row)
+                let distance: Double = row["distance"]
+                return (stop, distance)
+            }
+        }
+
+        let durationMs = Int(Date().timeIntervalSince(startTime) * 1000)
+        Logger.database.info(
+            "nearby_stops_query",
+            metadata: .from([
+                "count": results.count,
+                "duration_ms": durationMs,
+                "center": "(\(latitude),\(longitude))",
+                "radius": radiusMeters
+            ])
+        )
+
+        return results
+    }
+
     private static var verifiedStopsIndexes = false
 
     /// Verify that spatial indexes exist for stops table
