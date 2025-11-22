@@ -129,21 +129,28 @@ struct TripStopRow: View {
                     .foregroundColor(.primary)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
-                
+
                 Spacer()
-                
-                VStack(alignment: .trailing, spacing: 0) {
-                    Text(tripStop.arrivalTime)
-                        .font(.body)
-                        .fontWeight(.bold)
-                        .foregroundColor(.primary)
-                    
-                    Text("Scheduled")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+
+                VStack(alignment: .trailing, spacing: 4) {
+                    HStack(spacing: 4) {
+                        Text(tripStop.arrivalTime)
+                            .font(.body)
+                            .fontWeight(.bold)
+                            .foregroundColor(tripStop.realtime == true ? .primary : .secondary)
+
+                        Text(tripStop.realtime == true ? "Actual" : "Scheduled")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+
+                    // Delay badge (if delayed)
+                    if tripStop.isDelayed, let delayS = tripStop.delayS {
+                        delayBadge(delayS: delayS)
+                    }
                 }
             }
-            
+
             HStack(spacing: 8) {
                 if let platform = tripStop.platform {
                     Text("Platform \(platform)")
@@ -164,6 +171,65 @@ struct TripStopRow: View {
         .overlay(alignment: .leading) {
             StopTimelineView(isFirst: isFirst, isLast: isLast)
                 .frame(width: 32)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityText)
+    }
+
+    // MARK: - Computed Properties
+
+    private var accessibilityText: String {
+        var text = "\(tripStop.stopName), arrives at \(tripStop.arrivalTime)"
+
+        if let platform = tripStop.platform {
+            text += ", platform \(platform)"
+        }
+
+        if tripStop.isDelayed, let delayS = tripStop.delayS {
+            let delayMin = abs(delayS) / 60
+            if delayS < 0 {
+                text += ", \(delayMin) minutes early"
+            } else {
+                text += ", \(delayMin) minutes late"
+            }
+        }
+
+        if tripStop.wheelchairAccessible == 1 {
+            text += ", wheelchair accessible"
+        }
+
+        return text
+    }
+
+    // MARK: - Delay Badge
+
+    @ViewBuilder
+    private func delayBadge(delayS: Int) -> some View {
+        let delayMin = abs(delayS) / 60
+        let isEarly = delayS < 0
+
+        HStack(spacing: 2) {
+            Text(isEarly ? "\(delayMin) min early" : "+\(delayMin) min")
+                .font(.caption)
+                .fontWeight(.medium)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(delayColor(delayS: delayS))
+        .foregroundColor(.white)
+        .cornerRadius(4)
+        .accessibilityHidden(true)  // Already in accessibilityText
+    }
+
+    private func delayColor(delayS: Int) -> Color {
+        if delayS < -60 {
+            return .green  // Early >1 min
+        } else if abs(delayS) <= 60 {
+            return .gray   // On time ±1 min
+        } else if delayS <= 300 {
+            return .orange // Late 1-5 min
+        } else {
+            return .red    // Late >5 min
         }
     }
 }
