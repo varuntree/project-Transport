@@ -85,34 +85,27 @@ class DeparturesRepositoryImpl: DeparturesRepository {
     }
 
     func fetchDeparturesPage(stopId: String, timeSecs: Int?, direction: String, limit: Int) async throws -> DeparturesPage {
-        struct PaginationMeta: Codable {
+        // Updated to match actual backend response format where pagination is in 'data', not 'meta'
+        struct DeparturesData: Codable {
+            let departures: [Departure]
+            // Backend puts pagination fields directly in data, not meta
             let hasMorePast: Bool?
             let hasMoreFuture: Bool?
             let earliestTimeSecs: Int?
             let latestTimeSecs: Int?
-            let direction: String?
 
             enum CodingKeys: String, CodingKey {
+                case departures
                 case hasMorePast = "has_more_past"
                 case hasMoreFuture = "has_more_future"
                 case earliestTimeSecs = "earliest_time_secs"
                 case latestTimeSecs = "latest_time_secs"
-                case direction
             }
-        }
-
-        struct MetaData: Codable {
-            let pagination: PaginationMeta?
-        }
-
-        struct DeparturesData: Codable {
-            let departures: [Departure]
-            let count: Int
         }
 
         struct Response: Codable {
             let data: DeparturesData
-            let meta: MetaData
+            // meta contains source info, not pagination
         }
 
         do {
@@ -122,10 +115,10 @@ class DeparturesRepositoryImpl: DeparturesRepository {
 
             return DeparturesPage(
                 departures: response.data.departures,
-                earliestTimeSecs: response.meta.pagination?.earliestTimeSecs,
-                latestTimeSecs: response.meta.pagination?.latestTimeSecs,
-                hasMorePast: response.meta.pagination?.hasMorePast ?? false,
-                hasMoreFuture: response.meta.pagination?.hasMoreFuture ?? false
+                earliestTimeSecs: response.data.earliestTimeSecs,
+                latestTimeSecs: response.data.latestTimeSecs,
+                hasMorePast: response.data.hasMorePast ?? false,
+                hasMoreFuture: response.data.hasMoreFuture ?? false
             )
 
         } catch {
