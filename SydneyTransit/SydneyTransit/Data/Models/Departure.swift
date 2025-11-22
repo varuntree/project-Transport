@@ -45,11 +45,39 @@ struct Departure: Codable, Identifiable, Hashable {
         return Int(now.timeIntervalSince(midnight))
     }
 
-    // Computed: delay text ('+X min' if delayed, nil otherwise)
-    var delayText: String? {
-        guard delayS > 0 else { return nil }
-        let mins = delayS / 60
-        return "+\(mins) min"
+    // Computed: delay text ('On time', 'X min early', '+X min')
+    var delayText: String {
+        guard delayS != 0 else {
+            return "On time"
+        }
+
+        let delayMin = abs(delayS) / 60
+
+        if delayS < 0 {
+            // Early
+            return "\(delayMin) min early"
+        } else {
+            // Late
+            return "+\(delayMin) min"
+        }
+    }
+
+    // Computed: delay color (green/gray/orange/red based on delay magnitude)
+    var delayColor: Color {
+        if delayS < -60 {
+            return .green  // Early >1 min
+        } else if abs(delayS) <= 60 {
+            return .gray   // On time ±1 min
+        } else if delayS <= 300 {
+            return .orange // Late 1-5 min (60-300 seconds)
+        } else {
+            return .red    // Late >5 min
+        }
+    }
+
+    // Computed: is this departure delayed?
+    var isDelayed: Bool {
+        return abs(delayS) > 60  // More than 1 minute
     }
 
     // Computed: formatted departure time (HH:mm)

@@ -205,32 +205,17 @@ struct TripStopRow: View {
 
     @ViewBuilder
     private func delayBadge(delayS: Int) -> some View {
-        let delayMin = abs(delayS) / 60
-        let isEarly = delayS < 0
-
         HStack(spacing: 2) {
-            Text(isEarly ? "\(delayMin) min early" : "+\(delayMin) min")
+            Text(tripStop.delayText)
                 .font(.caption)
                 .fontWeight(.medium)
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
-        .background(delayColor(delayS: delayS))
+        .background(tripStop.delayColor)
         .foregroundColor(.white)
         .cornerRadius(4)
         .accessibilityHidden(true)  // Already in accessibilityText
-    }
-
-    private func delayColor(delayS: Int) -> Color {
-        if delayS < -60 {
-            return .green  // Early >1 min
-        } else if abs(delayS) <= 60 {
-            return .gray   // On time ±1 min
-        } else if delayS <= 300 {
-            return .orange // Late 1-5 min
-        } else {
-            return .red    // Late >5 min
-        }
     }
 }
 

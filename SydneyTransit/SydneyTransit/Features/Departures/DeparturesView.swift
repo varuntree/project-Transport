@@ -222,29 +222,40 @@ struct DepartureRow: View {
                 .background(Color.blue)
                 .cornerRadius(8)
 
-            // Headsign + status
+            // Headsign + platform
             VStack(alignment: .leading, spacing: 4) {
                 Text("to \(departure.headsign)")
                     .font(.body)
                     .lineLimit(1)
 
-                // Status text (On time, Early, Late, or Scheduled)
-                if let delayText = departure.delayText {
-                    Text(delayText)
-                        .font(.caption)
-                        .foregroundColor(.orange)
-                } else if departure.realtime && departure.delayS == 0 {
-                    Text("On time")
-                        .font(.caption)
-                        .foregroundColor(.green)
-                } else {
-                    Text("Scheduled")
+                if let platform = departure.platform {
+                    Text("Platform \(platform)")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
             }
 
             Spacer()
+
+            // Delay badge (color-coded)
+            if departure.isDelayed {
+                Text(departure.delayText)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(departure.delayColor)
+                    .foregroundColor(.white)
+                    .cornerRadius(4)
+            } else if departure.realtime {
+                Text("On time")
+                    .font(.caption)
+                    .foregroundColor(.green)
+            } else {
+                Text("Scheduled")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
 
             // Occupancy icon (if available)
             if let occupancy = departure.occupancyIcon {
@@ -260,5 +271,36 @@ struct DepartureRow: View {
             }
         }
         .padding(.vertical, 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityText)
+    }
+
+    private var accessibilityText: String {
+        var text = "\(departure.routeShortName) to \(departure.headsign), departs in \(departure.minutesUntilText)"
+
+        if let platform = departure.platform {
+            text += ", platform \(platform)"
+        }
+
+        if departure.isDelayed {
+            let delayMin = abs(departure.delayS) / 60
+            if departure.delayS < 0 {
+                text += ", \(delayMin) minutes early"
+            } else {
+                text += ", \(delayMin) minutes late"
+            }
+        } else if departure.realtime {
+            text += ", on time"
+        }
+
+        if departure.wheelchairAccessible == 1 {
+            text += ", wheelchair accessible"
+        }
+
+        if let occupancy = departure.occupancyIcon {
+            text += ", \(occupancy.label)"
+        }
+
+        return text
     }
 }
