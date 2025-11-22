@@ -85,38 +85,23 @@ async def search_stops(
     start_time = time.time()
 
     try:
-        # Sanitize input to prevent SQL injection (basic protection)
-        q_sanitized = q.replace("'", "''")
-
-        # Use pg_trgm for fuzzy search
-        query = f"""
-        SELECT stop_id, stop_name, stop_code, stop_lat, stop_lon,
-               wheelchair_boarding, location_type, parent_station,
-               similarity(stop_name, '{q_sanitized}') AS score
-        FROM stops
-        WHERE stop_name ILIKE '%{q_sanitized}%'
-           OR stop_name % '{q_sanitized}'
-        ORDER BY score DESC, stop_name
-        LIMIT {limit}
-        """
-
-        result = supabase.rpc("exec_raw_sql", {"query": query}).execute()
+        # Use parameterized RPC to prevent SQL injection
+        result = supabase.rpc(
+            "search_stops_by_name",
+            {"p_query": q, "p_limit": limit}
+        ).execute()
         stops = result.data or []
 
         # Log route_type distribution for multi-modal coverage validation
         route_type_distribution = {}
         if stops:
             for stop in stops:
-                # Query route_type for this stop
-                route_types_query = f"""
-                    SELECT DISTINCT r.route_type
-                    FROM patterns p
-                    JOIN routes r ON p.route_id = r.route_id
-                    JOIN pattern_stops ps ON p.pattern_id = ps.pattern_id
-                    WHERE ps.stop_id = '{stop["stop_id"]}'
-                """
+                # Query route_type for this stop via parameterized RPC
                 try:
-                    route_types = supabase.rpc("exec_raw_sql", {"query": route_types_query}).execute()
+                    route_types = supabase.rpc(
+                        "get_route_types_for_stop",
+                        {"p_stop_id": stop["stop_id"]}
+                    ).execute()
 
                     if route_types.data:
                         for rt_row in route_types.data:
@@ -175,19 +160,11 @@ async def get_stop(
 
         stop = stop_result.data[0]
 
-        # Get routes serving this stop
-        routes_query = f"""
-        SELECT DISTINCT r.route_id, r.route_short_name, r.route_long_name,
-               r.route_type, r.route_color
-        FROM routes r
-        JOIN trips t ON r.route_id = t.route_id
-        JOIN patterns p ON t.pattern_id = p.pattern_id
-        JOIN pattern_stops ps ON p.pattern_id = ps.pattern_id
-        WHERE ps.stop_id = '{stop_id}'
-        ORDER BY r.route_short_name
-        """
-
-        routes_result = supabase.rpc("exec_raw_sql", {"query": routes_query}).execute()
+        # Get routes serving this stop (parameterized via RPC to prevent SQL injection)
+        routes_result = supabase.rpc(
+            "get_routes_for_stop",
+            {"p_stop_id": stop_id}
+        ).execute()
         routes = routes_result.data or []
 
         stop['routes'] = routes

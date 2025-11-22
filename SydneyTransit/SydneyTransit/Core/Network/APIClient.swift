@@ -30,9 +30,9 @@ enum APIEndpoint {
     var path: String {
         switch self {
         case .getDepartures(let stopId, _, _, _):
-            return "/api/v1/stops/\(stopId)/departures"
+            return "/stops/\(stopId)/departures"
         case .getTrip(let tripId):
-            return "/api/v1/trips/\(tripId)"
+            return "/trips/\(tripId)"
         }
     }
 
@@ -136,7 +136,7 @@ class APIClient {
     }
 
     /// Generic GET request for custom endpoints
-    /// - Parameter path: URL path (e.g., "/api/v1/stops/123/alerts")
+    /// - Parameter path: URL path (e.g., "/stops/123/alerts")
     /// - Returns: Decoded response of type T
     func get<T: Decodable>(_ path: String) async throws -> T {
         guard let url = URL(string: baseURL + path) else {

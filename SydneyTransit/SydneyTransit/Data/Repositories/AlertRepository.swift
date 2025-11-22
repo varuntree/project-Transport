@@ -50,7 +50,7 @@ class AlertRepositoryImpl: AlertRepository {
         }
 
         // Use APIClient.get() with custom endpoint path
-        let endpoint = "/api/v1/stops/\(stopId)/alerts"
+        let endpoint = "/stops/\(stopId)/alerts"
 
         do {
             let response: Response = try await apiClient.get(endpoint)
