@@ -54,14 +54,29 @@ struct StopDetailsView: View {
                 .padding()
 
                 // Map section
-                Map(coordinateRegion: .constant(region), annotationItems: [stop]) { stop in
-                    MapMarker(coordinate: CLLocationCoordinate2D(
-                        latitude: stop.stopLat,
-                        longitude: stop.stopLon
-                    ), tint: .red)
+                ZStack(alignment: .bottomTrailing) {
+                    Map(coordinateRegion: .constant(region), annotationItems: [stop]) { stop in
+                        MapMarker(coordinate: CLLocationCoordinate2D(
+                            latitude: stop.stopLat,
+                            longitude: stop.stopLon
+                        ), tint: .red)
+                    }
+                    .frame(height: 250)
+                    .cornerRadius(12)
+                    
+                    NavigationLink(destination: MapView(selectedStop: stop)) {
+                        HStack {
+                            Image(systemName: "map.fill")
+                            Text("View on Map")
+                        }
+                        .font(.footnote.bold())
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        .background(.thinMaterial)
+                        .cornerRadius(8)
+                        .padding(8)
+                    }
                 }
-                .frame(height: 250)
-                .cornerRadius(12)
                 .padding(.horizontal)
 
                 // Share button
