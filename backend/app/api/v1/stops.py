@@ -14,7 +14,7 @@ from app.models.stops import (
     StopSearchResponse,
     RouteInStop
 )
-from app.services.realtime_service import get_realtime_departures, get_stop_earliest_departure
+from app.services.realtime_service import get_realtime_departures, get_stop_earliest_departure, get_departures_page
 from app.services.alert_service import get_alert_service
 from app.utils.logging import get_logger
 from supabase import Client
@@ -216,20 +216,9 @@ async def get_departures(
                 }
             )
 
-        # Verify stop exists in database
-        stop_check = supabase.table("stops").select("stop_id, stop_name").eq("stop_id", stop_id).execute()
-        if not stop_check.data:
-            logger.warning("stop_not_found", stop_id=stop_id)
-            raise HTTPException(
-                status_code=404,
-                detail={
-                    "error": {
-                        "code": "STOP_NOT_FOUND",
-                        "message": f"Stop with ID '{stop_id}' does not exist in database",
-                        "details": {"stop_id": stop_id}
-                    }
-                }
-            )
+        # Architecture decoupling: Remove hard Supabase check
+        # Let get_departures_page() handle stop existence check across all layers
+        # (Supabase OR Redis RT data)
 
         # Default time to now (seconds since midnight Sydney)
         if time_param is None:
@@ -253,78 +242,45 @@ async def get_departures(
                 }
             )
 
-        # Fetch real-time departures (merges static + Redis RT)
-        # Pass Sydney-local service date and seconds since midnight
-        service_date = datetime.now(pytz.timezone('Australia/Sydney')).strftime('%Y-%m-%d')
-        departures = get_realtime_departures(
+        # Fetch departures page with RT-only fallback (Layer 2↔3 decoupling)
+        page = await get_departures_page(
             stop_id=stop_id,
-            time_secs_local=time_secs,
-            service_date=service_date,
+            time_secs=time_secs,
             direction=direction,
-            limit=limit
+            limit=limit,
+            supabase=supabase
         )
 
-        if departures:
-            occupancy_count = sum(1 for d in departures if d.get('occupancy_status') is not None)
-            sample = departures[0]
-            logger.debug(
-                "departure_occupancy",
-                stop_id=stop_id,
-                trip_id=sample['trip_id'],
-                occupancy_status=sample.get('occupancy_status'),
-                occupancy_sample_count=occupancy_count
+        # 404 only if stop not found in ANY data source (Supabase AND Redis RT)
+        if not page.stop_exists:
+            logger.warning("stop_not_found_any_source", stop_id=stop_id)
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": {
+                        "code": "STOP_NOT_FOUND",
+                        "message": f"Stop with ID '{stop_id}' does not exist in any data source",
+                        "details": {"stop_id": stop_id}
+                    }
+                }
             )
 
         # Count realtime vs static
-        realtime_count = sum(1 for d in departures if d['realtime'])
-        static_count = len(departures) - realtime_count
+        realtime_count = sum(1 for d in page.departures if d['realtime'])
+        static_count = len(page.departures) - realtime_count
 
         duration_ms = int((time.time() - start_time_ms) * 1000)
-        logger.info("departures_fetched",
+        logger.info("departures_response",
                    stop_id=stop_id,
-                   time_secs=time_secs,
-                   total_count=len(departures),
+                   count=len(page.departures),
+                   source=page.source,
+                   stale=page.stale,
                    realtime_count=realtime_count,
                    static_count=static_count,
                    duration_ms=duration_ms)
 
-        # Pagination metadata for infinite scroll
-        # CRITICAL: Use realtime_time_secs (not scheduled) for boundaries to match sort dimension
-        # Pagination must align with displayed order (realtime times, not scheduled times)
-        pagination_meta = None
-        if departures:
-            earliest_time = min(d['realtime_time_secs'] for d in departures)
-            latest_time = max(d['realtime_time_secs'] for d in departures)
-
-            # Dynamic pagination threshold: query actual GTFS earliest departure for this stop
-            # Replaces static 3900 (1:05 AM) with stop-specific earliest time
-            stop_earliest_time = get_stop_earliest_departure(stop_id, service_date)
-            if stop_earliest_time is None:
-                # Fallback to static threshold if query fails
-                stop_earliest_time = 3900
-
-            pagination_meta = {
-                "has_more_past": earliest_time > stop_earliest_time,  # Dynamic: actual GTFS min time
-                "has_more_future": latest_time < 105723,  # Latest train ~29:22 (next day)
-                "earliest_time_secs": earliest_time,
-                "latest_time_secs": latest_time,
-                "direction": direction
-            }
-
-        return {
-            "data": {
-                "departures": departures,
-                "count": len(departures)
-            },
-            "meta": {
-                "pagination": pagination_meta,
-                "query": {
-                    "stop_id": stop_id,
-                    "time_secs": time_secs,
-                    "direction": direction
-                }
-            }
-        }
+        # Return page with API envelope
+        return page.to_dict()
 
     except HTTPException:
         # Re-raise validation errors

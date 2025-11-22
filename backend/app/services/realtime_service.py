@@ -130,6 +130,11 @@ def get_realtime_departures(
         if not service_date:
             raise ValueError("service_date is required")
 
+        # Normalize service_date to GTFS calendar format (YYYYMMDD).
+        # GTFS `calendar.txt` stores dates without hyphens; using the hyphenated
+        # form causes the SQL filter to miss all rows and return no departures.
+        service_date_gtfs = service_date.replace("-", "")
+
         # Log diagnostic info for debugging identifier handling
         logger.info(
             "departures_lookup_start",
@@ -171,8 +176,8 @@ def get_realtime_departures(
         JOIN routes r ON t.route_id = r.route_id
         JOIN calendar c ON t.service_id = c.service_id
         WHERE ps.stop_id = '{stop_id}'
-          AND c.start_date <= '{service_date}'
-          AND c.end_date >= '{service_date}'
+          AND c.start_date <= '{service_date_gtfs}'
+          AND c.end_date >= '{service_date_gtfs}'
           AND (t.start_time_secs + ps.departure_offset_secs) {time_filter}
         ORDER BY (t.start_time_secs + ps.departure_offset_secs) {sort_order}
         LIMIT {expanded_limit}
@@ -200,10 +205,12 @@ def get_realtime_departures(
                 service_date=service_date,
                 time_secs=time_secs_local
             )
-            return []
+            # Don't return early - continue to check RT data for RT-only mode
+            # (previously returned [] here, blocking RT-only serving)
 
         # Step 2: Determine modes needed (heuristic from route_ids)
-        modes_needed: Set[str] = {determine_mode(dep['route_id']) for dep in static_deps}
+        # If static_deps empty, modes_needed will be empty set (RT merge skipped below)
+        modes_needed: Set[str] = {determine_mode(dep['route_id']) for dep in static_deps} if static_deps else set()
 
         # Step 3: Fetch Redis RT delays + platform codes + occupancy (gzip blobs per mode)
         trip_delays: Dict[str, int] = {}  # {trip_id: delay_s}
@@ -409,3 +416,246 @@ def get_stop_earliest_departure(stop_id: str, service_date: str) -> Optional[int
         )
         # Fallback to default threshold on error
         return 3900  # 1:05 AM default
+
+
+# ===== Architecture Decoupling: DeparturesPage with RT-Only Mode =====
+
+
+def _compute_staleness(redis_binary: redis.Redis, modes: Set[str]) -> bool:
+    """Check if any RT blob is stale (>90s old).
+
+    Args:
+        redis_binary: Redis client for binary operations
+        modes: Set of transport modes to check
+
+    Returns:
+        True if any blob >90s old, False otherwise
+    """
+    import time as time_module
+
+    for mode in modes:
+        try:
+            updated_key = f'tu:{mode}:v1:updated_at'
+            updated_ts = redis_binary.get(updated_key)
+            if updated_ts:
+                blob_age = time_module.time() - float(updated_ts.decode('utf-8'))
+                if blob_age > 90:
+                    return True
+        except Exception as exc:
+            logger.warning("staleness_check_failed", mode=mode, error=str(exc))
+
+    return False
+
+
+def _build_rt_only_departures(
+    stop_id: str,
+    time_secs_local: int,
+    direction: str,
+    limit: int,
+    redis_binary: redis.Redis
+) -> List[Dict]:
+    """Build departures from RT data only (no static schedules).
+
+    Used when Supabase unavailable but Redis has GTFS-RT data.
+
+    Args:
+        stop_id: GTFS stop_id
+        time_secs_local: Seconds since local midnight
+        direction: 'past' or 'future'
+        limit: Max results
+        redis_binary: Redis client
+
+    Returns:
+        List of departure dicts with estimated_time (no scheduled_time)
+    """
+    departures = []
+
+    # Fetch all RT blobs (all modes - we don't know stop's modes without static data)
+    all_modes = ['sydneytrains', 'metro', 'buses', 'ferries', 'lightrail']
+
+    for mode in all_modes:
+        try:
+            tu_key = f'tu:{mode}:v1'
+            tu_blob = redis_binary.get(tu_key)
+
+            if not tu_blob:
+                continue
+
+            # Decompress and parse
+            decompressed = gzip.decompress(tu_blob)
+            data = json.loads(decompressed)
+
+            # Extract stop_time_updates for this stop
+            for tu in data:
+                trip_id = tu.get('trip_id')
+                if not trip_id:
+                    continue
+
+                # Find stop_time_update for our stop
+                stop_time_updates = tu.get('stop_time_updates', [])
+                for stu in stop_time_updates:
+                    if stu.get('stop_id') != stop_id:
+                        continue
+
+                    # Extract delay and estimate scheduled time
+                    departure_delay = stu.get('departure_delay', 0)
+                    # Note: RT-only mode can't compute scheduled_time without static data
+                    # We'll use estimated_time as both scheduled and realtime
+                    # This is approximate - client should handle RT-only gracefully
+                    estimated_time_secs = time_secs_local + departure_delay
+
+                    # Filter by direction
+                    if direction == 'future' and estimated_time_secs < time_secs_local:
+                        continue
+                    if direction == 'past' and estimated_time_secs > time_secs_local:
+                        continue
+
+                    departures.append({
+                        'trip_id': trip_id,
+                        'route_short_name': f'{mode.upper()}',  # Placeholder - no static data
+                        'route_long_name': f'{mode.title()} Service',
+                        'route_type': 3,  # Default to bus
+                        'route_color': None,
+                        'headsign': 'Real-Time Update',
+                        'scheduled_time_secs': estimated_time_secs - departure_delay,  # Approximation
+                        'realtime_time_secs': estimated_time_secs,
+                        'delay_s': departure_delay,
+                        'realtime': True,
+                        'stop_sequence': stu.get('stop_sequence', 0),
+                        'platform': stu.get('platform_code'),
+                        'wheelchair_accessible': 0,
+                        'occupancy_status': None,
+                    })
+
+        except gzip.BadGzipFile:
+            logger.warning("rt_only_gzip_error", mode=mode)
+        except json.JSONDecodeError as exc:
+            logger.warning("rt_only_json_error", mode=mode, error=str(exc))
+        except Exception as exc:
+            logger.warning("rt_only_fetch_failed", mode=mode, error=str(exc))
+
+    # Sort and limit
+    departures.sort(key=lambda x: x['realtime_time_secs'], reverse=(direction == 'past'))
+    return departures[:limit]
+
+
+async def get_departures_page(
+    stop_id: str,
+    time_secs: int,
+    direction: str,
+    limit: int,
+    supabase
+) -> "DeparturesPage":
+    """Get departures page with RT-only fallback (Layer 2↔3 decoupling).
+
+    Architecture: Tries static+RT merge first, falls back to RT-only if Supabase fails.
+    Enables serving departures when Layer 3 (Supabase) empty but Layer 2 (Redis) has data.
+
+    Args:
+        stop_id: GTFS stop_id
+        time_secs: Seconds since midnight Sydney
+        direction: 'past' or 'future'
+        limit: Max results
+        supabase: Supabase client
+
+    Returns:
+        DeparturesPage with source metadata (static+rt | rt_only | static_only | no_data)
+    """
+    from app.models.departures import DeparturesPage
+    import pytz
+    from datetime import datetime
+
+    start_time = time.time()
+
+    # Derive service_date from current Sydney time (normalize to GTFS YYYYMMDD format)
+    sydney_tz = pytz.timezone('Australia/Sydney')
+    service_date = datetime.now(sydney_tz).strftime('%Y-%m-%d')
+
+    # GTFS calendar.txt stores dates as YYYYMMDD (no hyphens). The previous code
+    # used the hyphenated form in the SQL filter, which never matched and
+    # returned zero static departures. Normalize here so calendar join succeeds.
+    service_date_gtfs = service_date.replace('-', '')
+
+    redis_binary = get_redis_binary()
+
+    # Check if stop exists in any source (Supabase OR Redis RT)
+    stop_exists_supabase = False
+    try:
+        stop_check = supabase.table("stops").select("stop_id").eq("stop_id", stop_id).execute()
+        stop_exists_supabase = len(stop_check.data) > 0 if stop_check.data else False
+    except Exception as exc:
+        logger.warning("stop_exists_check_failed", stop_id=stop_id, error=str(exc))
+
+    try:
+        # Try static+RT merge first
+        departures = get_realtime_departures(
+            stop_id=stop_id,
+            time_secs_local=time_secs,
+            service_date=service_date,
+            direction=direction,
+            limit=limit
+        )
+
+        if departures:
+            # Successfully fetched static+RT or static-only
+            realtime_count = sum(1 for d in departures if d['realtime'])
+            source = "static+rt" if realtime_count > 0 else "static_only"
+
+            # Determine modes for staleness check
+            modes_needed = {determine_mode(d.get('route_id', '')) for d in departures if d.get('route_id')}
+            stale = _compute_staleness(redis_binary, modes_needed) if modes_needed else False
+
+            # Build pagination metadata
+            earliest_time = min(d['realtime_time_secs'] for d in departures) if departures else None
+            latest_time = max(d['realtime_time_secs'] for d in departures) if departures else None
+
+            stop_earliest_time = get_stop_earliest_departure(stop_id, service_date) or 3900
+
+            return DeparturesPage(
+                stop_exists=stop_exists_supabase,
+                source=source,
+                stale=stale,
+                departures=departures,
+                earliest_time_secs=earliest_time,
+                latest_time_secs=latest_time,
+                has_more_past=earliest_time > stop_earliest_time if earliest_time else False,
+                has_more_future=latest_time < 105723 if latest_time else False
+            )
+        else:
+            # No static departures - try RT-only mode
+            logger.info("attempting_rt_only_mode", stop_id=stop_id)
+
+            rt_departures = _build_rt_only_departures(
+                stop_id=stop_id,
+                time_secs_local=time_secs,
+                direction=direction,
+                limit=limit,
+                redis_binary=redis_binary
+            )
+
+            if rt_departures:
+                # RT-only mode successful
+                all_modes = {'sydneytrains', 'metro', 'buses', 'ferries', 'lightrail'}
+                stale = _compute_staleness(redis_binary, all_modes)
+
+                earliest_time = min(d['realtime_time_secs'] for d in rt_departures)
+                latest_time = max(d['realtime_time_secs'] for d in rt_departures)
+
+                return DeparturesPage(
+                    stop_exists=True,  # RT data proves stop exists
+                    source="rt_only",
+                    stale=stale,
+                    departures=rt_departures,
+                    earliest_time_secs=earliest_time,
+                    latest_time_secs=latest_time,
+                    has_more_past=False,  # Can't determine without static data
+                    has_more_future=False
+                )
+            else:
+                # No data from any source
+                return DeparturesPage.empty(stop_id=stop_id, stop_exists=stop_exists_supabase)
+
+    except Exception as exc:
+        logger.error("departures_page_failed", stop_id=stop_id, error=str(exc))
+        # Return empty page on error
+        return DeparturesPage.empty(stop_id=stop_id, stop_exists=stop_exists_supabase)

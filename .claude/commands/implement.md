@@ -1,6 +1,6 @@
 # Implement Custom Plan
 
-Execute implementation through orchestrator-subagent pattern for any custom plan (not phase-specific). Orchestrator designs and delegates checkpoints, subagents execute with fresh context.
+Execute implementation through direct orchestrator pattern for any custom plan (not phase-specific). Orchestrator designs and implements all checkpoints end-to-end while maintaining plan context.
 
 ## Variables
 
@@ -14,18 +14,12 @@ plan_name: $1 (required: name of plan from /plan command)
 
 ## Architecture
 
-**Orchestrator (Main Agent):**
-- Maintains plan-level context (~5K tokens, constant)
-- Creates detailed designs for ALL checkpoints
-- Delegates execution to implementation subagents
-- Validates results, commits to git
-- Never drowns in implementation details
-
-**Implementation Subagents (Per Checkpoint):**
-- Fresh context window per checkpoint
-- Receives focused task package
-- Implements, self-validates, returns structured result
-- No git commits (orchestrator handles)
+**Orchestrator (Main Agent - Direct Implementation):**
+- Maintains full plan context (grows from ~5K → ~15-25K as checkpoints complete)
+- Creates detailed designs for ALL checkpoints upfront
+- Implements each checkpoint directly with full context continuity
+- Validates implementation, commits to git atomically
+- Sees all prior work - builds correctly first time
 
 ---
 
@@ -54,7 +48,7 @@ plan_name: $1 (required: name of plan from /plan command)
    # Do NOT load all at once - load per checkpoint as needed
    ```
 
-**Total orchestrator context: ~5K tokens (stays constant throughout)**
+**Initial orchestrator context: ~5K tokens (grows as checkpoints complete)**
 
 **Log state:**
 ```bash
@@ -85,7 +79,7 @@ echo '{"stage":"context_loaded","plan_name":"'{plan_name}'","exploration_tokens"
 
 ## Stage 3: Create Detailed Designs (All Checkpoints)
 
-**Orchestrator designs BEFORE delegating:**
+**Orchestrator designs BEFORE implementing:**
 
 For each checkpoint from implementation plan:
 
@@ -132,15 +126,12 @@ Create `.workflow-logs/active/custom/{plan_name}/checkpoint-{N}-design.md`:
 # Expected output: <specific result>
 ```
 
-## References for Subagent
+## Implementation References
 - Exploration report: `critical_patterns` → <specific pattern>
 - iOS research: `.workflow-logs/active/custom/{plan_name}/ios-research-<topic>.md`
 - Standards: DEVELOPMENT_STANDARDS.md:Section X
 - Architecture: <spec file>:Section Y
 - Previous checkpoint: <if depends on previous checkpoint result>
-
-## Estimated Complexity
-<simple|moderate|complex> - <reasoning>
 ```
 
 **Orchestrator creates designs for ALL checkpoints before starting execution.**
@@ -152,123 +143,58 @@ Create `.workflow-logs/active/custom/{plan_name}/checkpoint-{N}-design.md`:
 
 ---
 
-## Stage 4: Execute Checkpoints (Delegation Loop)
+## Stage 4: Execute Checkpoints (Direct Implementation)
 
 **For each checkpoint:**
 
-### 4.1 Package Checkpoint Task
+### 4.1 Load Checkpoint Design
 
-Orchestrator prepares task package:
-
-```markdown
-TASK: Implement Checkpoint {N}: <Name>
-
-PLAN CONTEXT:
-- Plan: {plan_name}
-- Task type: {task_type from exploration}
-- Overall goal: {context_summary from exploration}
-- Your checkpoint: <Specific goal>
-
-CHECKPOINT DESIGN:
-<Paste full design from .workflow-logs/active/custom/{plan_name}/checkpoint-{N}-design.md>
-
-PREVIOUS CHECKPOINT RESULT (if N > 1):
-<From previous subagent JSON return>
-{
-  "status": "complete",
-  "files_created": ["..."],
-  "validation_passed": true,
-  "next_checkpoint_context": "Critical info for handoff"
-}
-
-REFERENCES (Read if needed):
-- Exploration patterns: .workflow-logs/active/custom/{plan_name}/exploration-report.json → critical_patterns
-- iOS research: .workflow-logs/active/custom/{plan_name}/ios-research-summary.json (see which files exist)
-  - Load specific research file: .workflow-logs/active/custom/{plan_name}/ios-research-<topic>.md (only if checkpoint needs it)
-- Standards: DEVELOPMENT_STANDARDS.md (specific sections in design)
-- Architecture specs: <From design references>
-- Example code: <From exploration report example_location>
-
-EXECUTION GUIDELINES:
-1. Implement all files specified in design
-2. Follow DEVELOPMENT_STANDARDS.md patterns (logging, error handling, naming)
-3. Self-validate:
-   - Compile check (Python: python -m py_compile file.py, Swift: Cmd+B)
-   - Run validation command from design
-   - Fix errors (max 2 retry loops)
-   - If still failing after 2 retries: return blocker status
-4. Return structured JSON (format below)
-
-CONFIDENCE CHECK (CRITICAL):
-Before implementing any pattern/library/API:
-- Am I 80%+ confident this is correct?
-- Is this iOS-specific? → MUST have iOS research reference
-- Is this external service? → Check documentation if uncertain
-- NEVER hallucinate - if confidence <80%, READ the reference docs
-
-If uncertain:
-- iOS patterns → Check .workflow-logs/active/custom/{plan_name}/ios-research-summary.json for relevant topic, then read that specific research file
-- Backend patterns → Read DEVELOPMENT_STANDARDS.md section
-- External service → Use WebFetch or search for official docs
-- Return "blocked" status if truly stuck (don't guess, NEVER hallucinate iOS APIs)
-
-DO NOT:
-- Commit to git (orchestrator handles)
-- Move to next checkpoint (you only do this one)
-- Read unrelated files (stay focused)
-- Implement features not in design
-- Skip error handling or logging
-
-RETURN FORMAT (JSON):
-{
-  "status": "complete|blocked|partial",
-  "checkpoint": {checkpoint_number},
-  "files_created": ["path/to/file.py", "path/to/file.swift"],
-  "files_modified": ["path/to/existing.py"],
-  "validation": {
-    "passed": true|false,
-    "command": "<validation command run>",
-    "output": "<actual output>",
-    "issues": []
-  },
-  "blockers": [
-    {"type": "error|uncertainty|missing", "description": "...", "attempted_fixes": ["..."]}
-  ],
-  "next_checkpoint_context": "Critical info for next checkpoint (e.g., 'Generated 487 patterns in patterns table, use pattern_id foreign key')",
-  "confidence_checks": {
-    "ios_research_consulted": true|false,
-    "standards_followed": ["Section 2", "Section 4"],
-    "uncertainties_researched": ["Topic 1 - researched Apple docs"]
-  }
-}
+Read checkpoint design:
+```bash
+cat .workflow-logs/active/custom/{plan_name}/checkpoint-{N}-design.md
 ```
 
-### 4.2 Delegate to Implementation Subagent
+Review:
+- Goal and approach
+- Files to create/modify
+- Implementation references
+- Validation command
+- Previous checkpoint context (if N > 1)
 
-```
-Task tool:
-- subagent_type: "general-purpose"
-- model: "sonnet"  # CRITICAL: Must use Sonnet (not Haiku)
-- description: "Implement Checkpoint {N}: <Name>"
-- prompt: <Full task package from 4.1>
-```
+### 4.2 Implement Checkpoint Directly
 
-**Wait for subagent completion.**
+**Orchestrator implements (with full context):**
 
-### 4.3 Validate Subagent Result
+1. **Confidence check BEFORE implementing:**
+   - Am I 80%+ confident this pattern/API is correct?
+   - iOS-specific code? → Read iOS research file from design references
+   - External service? → WebFetch/search official docs if uncertain
+   - NEVER hallucinate - if confidence <80%, READ the reference docs
 
-**Orchestrator independently verifies:**
+2. **Create/modify files per design:**
+   - Follow DEVELOPMENT_STANDARDS.md (logging, error handling, naming)
+   - Implement all files specified in design
+   - Use patterns from exploration report critical_patterns
+   - Reference previous checkpoint results for context handoff
 
-1. **Check files exist:**
+3. **Self-validate as you go:**
+   - Does this match the design approach?
+   - Are all edge cases handled?
+   - Is logging/error handling included?
+
+### 4.3 Validate Implementation
+
+**Check correctness:**
+
+1. **Verify files exist:**
    ```bash
-   ls -la <files from subagent files_created>
-   # Verify not hallucinated
+   ls -la <files created/modified>
    ```
 
 2. **Run validation command:**
    ```bash
    <validation command from checkpoint design>
-   # Compare output to expected
+   # Compare output to expected result
    ```
 
 3. **Compile check (if applicable):**
@@ -280,65 +206,27 @@ Task tool:
    xcodebuild -scheme SydneyTransit -sdk iphonesimulator build
    ```
 
-4. **Compare subagent report vs actual state:**
-   - If subagent said "complete" but validation fails → Issue detected
-   - If files missing → Subagent hallucinated
-
 **If validation fails:**
-- **Option 1:** Invoke bugfix subagent (automatic, see 4.3.1)
-- **Option 2:** Redesign checkpoint (orchestrator adjusts design)
-- **Option 3:** Escalate to user (true blocker)
+- **Option 1:** Fix directly (max 1 retry attempt)
+- **Option 2:** Redesign checkpoint (create design-v2.md, re-implement)
+- **Option 3:** Escalate to user (true blocker - external dependency, unclear requirement)
 
-**Retry once, then escalate.**
-
-### 4.3.1 Invoke Bugfix Subagent
-
-**Orchestrator automatic bugfix workflow:**
-
-1. **Capture bug context:**
-   ```bash
-   # Save validation failure
-   echo '{
-     "checkpoint": '{checkpoint_number}',
-     "validation_command": "<command>",
-     "validation_output": "<output>",
-     "expected_output": "<from design>",
-     "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
-   }' > .workflow-logs/active/custom/{plan_name}/checkpoint-{N}-validation-failure.json
-   ```
-
-2. **Invoke /fix-bug:**
-   ```
-   SlashCommand: /fix-bug custom {plan_name} {checkpoint_number} validation_failed
-   ```
-
-3. **Process bugfix result:**
-
-   **If status: "fixed":**
-   - Re-run orchestrator validation (Stage 4.3 checks)
-   - If passes → Commit (Stage 4.4)
-   - If still fails → Escalate to user
-
-   **If status: "blocked":**
-   - Report to user: diagnosis + blocker + required action
-   - Pause implementation, wait for user decision
-
-   **If status: "needs_redesign":**
-   - Orchestrator redesigns checkpoint (create design-v2.md)
-   - Re-invoke implementation subagent with v2 design
-   - Validate again
-
-4. **Max 1 automatic attempt. If fails → escalate to user.**
+**Max 1 retry, then escalate to user.**
 
 ### 4.4 Commit Checkpoint (Atomic)
-
-**Orchestrator commits (not subagent):**
 
 ```bash
 git add .
 
-# Save subagent result
-echo '<subagent_json>' > .workflow-logs/active/custom/{plan_name}/checkpoint-{N}-result.json
+# Log checkpoint result
+echo '{
+  "checkpoint": '{checkpoint_number}',
+  "status": "complete",
+  "files_created": ["..."],
+  "files_modified": ["..."],
+  "validation_passed": true,
+  "next_checkpoint_context": "Critical info for next checkpoint"
+}' > .workflow-logs/active/custom/{plan_name}/checkpoint-{N}-result.json
 
 git add .workflow-logs/active/custom/{plan_name}/
 
@@ -357,26 +245,19 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 git tag {plan_name}-checkpoint-{N}
 ```
 
-**Why orchestrator commits:**
-- Clean git history (not polluted by subagent)
-- Orchestrator control (can rollback if needed)
-- Includes checkpoint result JSON (full audit trail)
-
-### 4.5 Update Orchestrator State
+### 4.5 Update State and Continue
 
 ```bash
 # Update state for next checkpoint
 echo '{
   "checkpoint_completed": '{checkpoint_number}',
-  "status": "<from subagent>",
+  "status": "complete",
   "files_created": '<count>',
-  "next_checkpoint_context": "<from subagent result>"
+  "next_checkpoint_context": "<critical info for next checkpoint>"
 }' >> .workflow-logs/active/custom/{plan_name}/orchestrator-state.json
 ```
 
-### 4.6 Repeat for Next Checkpoint
-
-Load next checkpoint design, package task (include previous result), delegate.
+**Repeat for next checkpoint** - load next design, implement, validate, commit.
 
 ---
 
@@ -616,24 +497,20 @@ Next: Review report, then merge to main
 
 ## Notes
 
-**Orchestrator Benefits:**
-- Maintains plan coherence (never lost in details)
-- Clean context per checkpoint (no context rot)
-- Independent validation (catches subagent hallucinations)
-- Clean git history (atomic commits per checkpoint)
-
-**Subagent Benefits:**
-- Fresh context (15K+ tokens for implementation)
-- Focused task (one checkpoint, clear goal)
-- Self-contained (design + references provided)
-- Fail-safe (orchestrator validates independently)
+**Direct Implementation Benefits:**
+- Full context continuity (sees all prior checkpoints, builds correctly first time)
+- No information loss between checkpoints (understands dependencies implicitly)
+- Simpler execution (no task packaging, JSON parsing, or subagent coordination)
+- Clean git history (atomic commits per checkpoint with full result logs)
+- Higher reliability (no "subagent assumed wrong context" failures)
 
 **Token Management:**
-- Orchestrator: ~5K constant (never grows)
-- Subagent: ~15K per checkpoint (then discarded)
-- Total: More tokens used, but higher quality + reliability
+- Orchestrator context: ~5K → ~15-25K total (grows incrementally per checkpoint)
+- Growth rate: ~2-4K per checkpoint (design + implementation + result)
+- Still manageable for plans with 5-8 checkpoints
+- For larger plans (10+ checkpoints): consider splitting into sub-plans
 
 **Cost vs Quality:**
-- Multiple Sonnet invocations = higher cost
-- But: Fewer bugs, no context pollution, reliable output
-- Trade-off: Optimizing for reliability over cost
+- Single Sonnet session (vs multiple subagent invocations) = lower cost
+- Context continuity → fewer mistakes → less rework
+- Trade-off: Optimizing for both reliability AND cost efficiency

@@ -1,0 +1,805 @@
+# Oracle Context: Refactor 3-Layer Architecture to Restore Decoupling
+# Session: 1763793313-refactor-decouple-3layer-architecture
+# Generated: 2025-11-22T10:48:33+00:00
+# Token estimate: 28500
+
+## PROBLEM STATEMENT
+
+Current state: 3-layer offline-first architecture implemented with CRITICAL coupling violations:
+- Layer 1 (iOS GRDB): Incomplete offline fallback (throws on error instead of graceful degradation)
+- Layer 2 (Backend Supabase): Blocks Layer 3 by checking Supabase tables BEFORE querying Redis RT
+- Layer 3 (Backend Redis RT): Has real-time data (1506 VPs, 3580 TUs) but cannot serve it due to Layer 2 dependency
+
+Impact: App shows "Network error" despite having data in all 3 layers. Architecture sound but implementation violated decoupling principles.
+
+Need: Refactoring plan to restore independent layers + validation strategy.
+
+## REPOSITORY STRUCTURE
+
+prj_transport/
+├── backend/
+│   ├── app/
+│   │   ├── api/v1/
+│   │   │   └── stops.py (431 lines) - Layer 2 blocking check
+│   │   ├── services/
+│   │   │   └── realtime_service.py (412 lines) - Layer 3 RT merge
+│   │   └── tasks/
+│   │       └── gtfs_rt_poller.py (434 lines) - Layer 3 RT poller
+│   └── docs/
+│       └── architecture/
+│           ├── IOS_APP_SPECIFICATION.md (1267 lines)
+│           ├── BACKEND_SPECIFICATION.md (1665 lines)
+│           └── DATA_ARCHITECTURE.md (1485 lines)
+├── SydneyTransit/
+│   ├── Data/
+│   │   └── Repositories/
+│   │       └── DeparturesRepository.swift (MISSING - file does not exist)
+│   └── Core/
+│       └── Database/
+│           └── DatabaseManager.swift (MISSING - file does not exist)
+└── .workflow-logs/
+    └── custom/root-cause-analysis-3layer-failure/
+        └── ROOT_CAUSE_ANALYSIS.md (406 lines) - Complete analysis
+
+## FILE CONTENTS
+
+══════════════════════════════════════════════════════════════
+File: .workflow-logs/custom/root-cause-analysis-3layer-failure/ROOT_CAUSE_ANALYSIS.md
+══════════════════════════════════════════════════════════════
+
+# Root Cause Analysis: 3-Layer Offline-First Architecture Failure
+
+**Date:** 2025-11-22
+**Severity:** CRITICAL - All 3 architectural layers failing
+**Impact:** Offline-first design violated, app unusable
+
+---
+
+## Executive Summary
+
+**Finding:** The 3-layer offline-first architecture is **architecturally sound** in specification but **incompletely implemented** with **critical layer coupling violations**.
+
+**3 Layers (Spec-Defined):**
+1. **Layer 1 (Primary):** iOS GRDB - Bundled offline data, no network required
+2. **Layer 2 (Secondary):** Backend Supabase - Cloud database with GTFS static data
+3. **Layer 3 (Tertiary):** Redis GTFS-RT - Real-time overlays on static schedule
+
+**Intended Flow:**
+- Try Layer 1 (GRDB) → if empty/stale, try Layer 2 (Supabase API) → if available, overlay Layer 3 (Redis RT)
+- Graceful degradation: Each layer works independently
+
+**Actual Flow:**
+- Layer 2 blocks Layer 3 (wrong coupling)
+- Layer 1 throws exceptions (incomplete fallback)
+- Layers are **tightly coupled** instead of **independent**
+
+---
+
+## Architectural Violations
+
+### **VIOLATION 1: Layer 2 Blocks Layer 3 (Backend)**
+
+**File:** `backend/app/api/v1/stops.py:220-232`
+
+**Spec Requirement (BACKEND_SPECIFICATION.md):**
+> "Get real-time departures from stop (merges static schedules + GTFS-RT delays)"
+
+**Code:**
+```python
+# Line 220: Check Supabase stops table FIRST
+stop_check = supabase.table("stops").select("stop_id, stop_name").eq("stop_id", stop_id).execute()
+if not stop_check.data:
+    raise HTTPException(status_code=404, detail="Stop not found")  # ❌ BLOCKS HERE
+
+# Line 259: Real-time merge (NEVER REACHED if stops table empty)
+departures = get_realtime_departures(...)
+```
+
+**Violation:**
+- Backend checks Supabase `stops` table **BEFORE** consulting Redis GTFS-RT data
+- If `stops` table empty → 404 error, real-time data never queried
+- **Layer 3 (RT) depends on Layer 2 (Supabase) being populated**
+
+**Correct Pattern:**
+- Layer 3 should work **independently** of Layer 2
+- Backend should serve RT data even if Supabase migration never ran
+
+**Impact:**
+- Redis has 1506 vehicle positions, 3580 trip updates (verified working)
+- Backend returns 404 "Stop not found" before checking Redis
+- iOS receives 404 → triggers network error
+
+**Root Cause:** **Architectural coupling violation** - Layer 3 should not depend on Layer 2
+
+---
+
+### **VIOLATION 2: Layer 3 Requires Layer 2 Data (Backend RT Merge)**
+
+**File:** `backend/app/services/realtime_service.py:181-184`
+
+**Code:**
+```python
+# Query Supabase for static schedule (pattern_stops)
+result = supabase.rpc("exec_raw_sql", {"query": query}).execute()
+static_deps = result.data or []
+
+if not static_deps:
+    logger.warning("no_static_departures", ...)
+    return []  # ❌ RETURNS EMPTY even if Redis has RT data
+```
+
+**Violation:**
+- RT merge logic **requires** Supabase `pattern_stops` data to exist
+- If pattern model incomplete/empty → returns `[]`
+- **Redis GTFS-RT blobs ignored** because no static schedule to merge with
+
+**Spec Expected:**
+- RT data contains: trip_id, delay_s, platform, occupancy_status
+- Should be usable **standalone** (RT-only mode) if static schedule unavailable
+
+**Impact:** "No upcoming departures" shown even when Redis has real-time updates
+
+**Root Cause:** **Wrong layer coupling** - RT should enrich static, not require it
+
+---
+
+### **VIOLATION 3: Layer 1 Incomplete Fallback (iOS Repository)**
+
+**File:** iOS files missing - `SydneyTransit/Data/Repositories/DeparturesRepository.swift` and `SydneyTransit/Core/Database/DatabaseManager.swift` do not exist
+
+**Spec Requirement (IOS_APP_SPECIFICATION.md Section 8):**
+> "Offline-first: GRDB bundled data, graceful degradation"
+
+**Expected Pattern (from DEVELOPMENT_STANDARDS.md):**
+```swift
+// Try local DB first
+if let stop = try dbManager.read({ db in
+    try Stop.fetchOne(db, key: id)
+}) {
+    return stop
+}
+// Fallback to API
+return try await apiClient.fetchStop(id: id)
+```
+
+**Violation:**
+- iOS offline fallback files do not exist
+- No GRDB implementation found
+- Cannot verify offline-first pattern compliance
+
+**Impact:** Cannot test Layer 1 offline capability
+
+**Root Cause:** **Missing iOS implementation** - offline-first pattern not yet implemented
+
+---
+
+## Phase Implementation Gaps
+
+### **GAP 1: Phase 1 Acceptance Criteria Not Met**
+
+**IMPLEMENTATION_ROADMAP.md Phase 1:**
+> "Acceptance Criteria: Backend: GTFS data loaded to Supabase (<50MB total)"
+
+**Reality:**
+- Supabase `stops` table **EMPTY** (verified by 404 errors)
+- GTFS static import script either:
+  - Never executed
+  - Executed but failed silently
+  - Configured for wrong Supabase project
+
+**Evidence:**
+```bash
+# Backend health check
+curl http://localhost:8000/health
+{"data":{"status":"healthy","services":{"db":"connected","cache":"connected"}}}
+
+# But stops table empty (inferred from 404 errors)
+```
+
+**Impact:**
+- Phase 2 (Real-time) built on **incomplete** Phase 1
+- **Quality gate failure:** Phase not verified before proceeding
+
+**Root Cause:** **Missing phase validation** - acceptance criteria not enforced
+
+---
+
+### **GAP 2: Offline-First Pattern Inconsistently Applied**
+
+**DEVELOPMENT_STANDARDS.md Section 4 (Repository Pattern):**
+```swift
+// Standard pattern: Try local DB first
+if let stop = try dbManager.read({ db in
+    try Stop.fetchOne(db, key: id)
+}) {
+    return stop
+}
+// Fallback to API
+return try await apiClient.fetchStop(id: id)
+```
+
+**Actual Implementation:**
+- iOS files missing - cannot verify pattern compliance
+
+**Root Cause:** **Missing iOS implementation** - offline-first pattern not yet implemented
+
+---
+
+## Failure Sequence (Complete Trace)
+
+**User Action:** Tap stop in iOS app → Navigate to DeparturesView
+
+**Intended Flow (Spec):**
+1. iOS tries GRDB (Layer 1) → shows offline data immediately ✅
+2. iOS calls backend API (Layer 2) → enriches with fresh static schedule
+3. Backend merges Redis RT (Layer 3) → overlay real-time delays/platforms
+4. iOS displays: GRDB base + API enrichment + RT overlays
+
+**Actual Flow (Broken):**
+1. iOS calls backend API `/stops/{stop_id}/departures` (skips GRDB Layer 1 - files missing)
+2. Backend checks Supabase `stops` table → **EMPTY** → 404 "Stop not found"
+3. Backend NEVER queries Redis RT (Layer 3 blocked by Layer 2 failure)
+4. iOS receives 404 → shows "Network error: Could not connect to the server"
+
+**Why All 3 Layers Fail:**
+- **Layer 1 (GRDB):** Not implemented (iOS files missing)
+- **Layer 2 (Supabase):** Empty, blocks request with 404
+- **Layer 3 (Redis RT):** Has data (1506 VPs, 3580 TUs) but never queried
+
+---
+
+## Root Causes Summary
+
+| Issue | Root Cause | Category | Severity |
+|-------|-----------|----------|----------|
+| Real-time data not showing | Backend checks Supabase before Redis, 404 blocks RT | Architectural coupling | CRITICAL |
+| "Network error" shown | iOS offline fallback files missing | Missing implementation | CRITICAL |
+| "No upcoming departures" | Backend RT merge returns `[]` if no static_deps | Wrong layer coupling | HIGH |
+| Supabase tables empty | Phase 1 GTFS import never ran or failed | Missing phase validation | CRITICAL |
+
+---
+
+## Architectural Fix Strategy
+
+### **FIX 1: Decouple Backend Layers (Layer 2 ↛ Layer 3)**
+
+**Current (Wrong):**
+```python
+# stops.py:220-232
+if not supabase_stop_exists:
+    return 404  # Blocks RT data
+```
+
+**Option A: Remove Supabase check (dev mode)**
+```python
+# Quick fix for local development
+if settings.ENVIRONMENT != "production":
+    pass  # Skip stop validation, allow RT-only mode
+else:
+    if not stop_check.data:
+        raise HTTPException(404)
+```
+
+**Option B: Allow RT-only mode**
+```python
+# Check stop exists in Redis RT data OR Supabase
+stop_exists = check_redis_has_stop(stop_id) or check_supabase_has_stop(stop_id)
+if not stop_exists:
+    raise HTTPException(404, "Stop not found in any data source")
+```
+
+**Recommended:** Option A (quick fix) + later migrate to Option B (proper design)
+
+---
+
+### **FIX 2: iOS Double-Fallback (Layer 1 Graceful Degradation)**
+
+**Pattern to implement:**
+```swift
+func fetchDeparturesPage(...) async throws -> DeparturesPage {
+    do {
+        // Try API first
+        let response: Response = try await apiClient.request(endpoint)
+        return DeparturesPage(...)
+    } catch {
+        // Double-fallback: API failed → try GRDB → if GRDB fails → return empty
+        do {
+            let departures = try DatabaseManager.shared.getDepartures(stopId: stopId, limit: limit)
+            logger.warning("Using offline data", stopId: stopId)
+            return DeparturesPage(
+                departures: departures,
+                earliestTimeSecs: departures.first?.scheduledTimeSecs,
+                latestTimeSecs: departures.last?.scheduledTimeSecs,
+                hasMorePast: false,  // Offline has no pagination
+                hasMoreFuture: false
+            )
+        } catch {
+            // All layers failed - return empty with error logged
+            logger.error("All data sources failed", stopId: stopId, error: error)
+            return DeparturesPage(
+                departures: [],
+                earliestTimeSecs: nil,
+                latestTimeSecs: nil,
+                hasMorePast: false,
+                hasMoreFuture: false
+            )
+        }
+    }
+}
+```
+
+---
+
+### **FIX 3: Complete Phase 1 GTFS Import**
+
+**Critical Blocker:** Supabase tables must be populated
+
+**Option A: Run GTFS import (proper fix)**
+```bash
+# Execute Phase 1 GTFS static sync task
+cd backend
+source venv/bin/activate
+python -c "from app.tasks.gtfs_static_sync import sync_gtfs_static; sync_gtfs_static()"
+```
+
+**Option B: Skip for MVP (dev workaround)**
+- Remove Supabase `stops` table check (Fix 1 Option A)
+- Backend serves Redis RT data only
+- iOS shows GRDB offline data + RT overlays (if backend reachable)
+
+**Recommended:** Option B (quick win) → Option A (proper Phase 1 completion later)
+
+---
+
+## Validation Plan
+
+### **Test 1: Layer 1 (iOS GRDB) Works Offline**
+```bash
+# Stop all backend services
+cd backend && ./scripts/stop_all.sh
+
+# Open iOS app → Departures screen
+# Expected: Shows offline GRDB departures (no network error)
+# Actual (before fix): Files missing, cannot test
+# Actual (after Fix 2): Shows offline data ✅
+```
+
+### **Test 2: Layer 3 (Redis RT) Works Without Supabase**
+```bash
+# Backend running, Supabase empty, Redis has RT data
+curl http://localhost:8000/api/v1/stops/200060/departures
+
+# Expected: Returns real-time departures from Redis
+# Actual (before fix): 404 "Stop not found"
+# Actual (after Fix 1): Returns RT departures ✅
+```
+
+### **Test 3: All 3 Layers Work Together**
+```bash
+# Backend running, Supabase populated, Redis has RT data
+curl http://localhost:8000/api/v1/stops/200060/departures
+
+# Expected: Returns Supabase static schedule + Redis RT overlays
+# Actual (after Fix 1 + Phase 1 completion): Merged departures ✅
+```
+
+---
+
+## Confidence Assessment
+
+| Analysis Area | Confidence | Evidence |
+|--------------|-----------|----------|
+| Layer 1 (iOS GRDB) incomplete fallback | 50% | iOS files missing, cannot verify implementation |
+| Layer 2 (Backend Supabase) blocks Layer 3 | 99% | Read stops.py:220-232, verified 404 error before RT query |
+| Layer 3 (Redis RT) has data but not used | 95% | Manually ran RT poller, confirmed 1506 VPs + 3580 TUs cached |
+| Phase 1 GTFS import never ran | 80% | Inferred from 404 errors, need to verify Supabase tables directly |
+
+---
+
+## Recommendations
+
+**Priority 1 (Critical - Unblock Development):**
+1. **TODO:** Remove backend Supabase check (Fix 1 Option A) - 15 min
+2. **TODO:** Implement iOS offline fallback files (Fix 2) - 60 min
+3. **TODO:** Add iOS double-fallback pattern (Fix 2) - 30 min
+
+**Priority 2 (High - Complete Phase 1):**
+4. **TODO:** Run GTFS static import to Supabase (Fix 3 Option A) - 2 hours
+5. **TODO:** Verify Phase 1 acceptance criteria (all tables populated)
+
+**Priority 3 (Medium - Architecture Hardening):**
+6. **TODO:** Add integration tests for 3-layer fallback
+7. **TODO:** Implement RT-only mode (Fix 1 Option B)
+8. **TODO:** Add phase validation gates (enforce acceptance criteria)
+
+---
+
+## Conclusion
+
+**Architectural Design:** ✅ SOUND (3-layer offline-first is correct approach)
+
+**Implementation:** ❌ INCOMPLETE + VIOLATED
+
+**Key Failures:**
+1. Layer coupling violation (Layer 3 depends on Layer 2)
+2. Incomplete offline-first pattern (Layer 1 not implemented)
+3. Missing phase validation (Phase 1 acceptance criteria not met)
+
+**Impact:**
+- App appears broken despite having necessary RT data
+- Redis has real-time data, but blocked by empty Supabase check
+- Architecture robust but **layers don't communicate correctly**
+
+**Path Forward:**
+- Fix layer coupling (decouple backend checks)
+- Implement iOS offline-first pattern (create missing files)
+- Enforce phase gates (validate acceptance criteria before proceeding)
+
+---
+
+**Analysis Complete:** 2025-11-22
+**Next Step:** Apply Priority 1 fixes (3 tasks, ~105 min total)
+
+
+══════════════════════════════════════════════════════════════
+File: backend/app/api/v1/stops.py (Lines 185-232)
+══════════════════════════════════════════════════════════════
+
+@router.get("/stops/{stop_id}/departures")
+async def get_departures(
+    stop_id: str,
+    time_param: Optional[int] = Query(None, alias="time", description="Seconds since midnight Sydney time (default: now)"),
+    direction: str = Query("future", regex="^(past|future)$", description="Direction: 'past' for earlier departures, 'future' for later (default: future)"),
+    limit: int = Query(10, ge=1, le=50, description="Max results"),
+    supabase: Client = Depends(get_supabase)
+):
+    """Get real-time departures from stop (merges static schedules + GTFS-RT delays).
+
+    Phase 2: Returns real-time predictions with delay_s and realtime flag.
+    Bidirectional scroll: direction='past' for earlier departures, 'future' for later.
+    Graceful degradation to static schedules if Redis cache unavailable.
+    """
+    start_time_ms = time.time()
+
+    try:
+        # Log received stop_id for debugging
+        logger.info("departures_request", stop_id=stop_id, stop_id_type=type(stop_id).__name__)
+
+        # Validate stop_id is non-empty
+        if not stop_id or not stop_id.strip():
+            logger.warning("departures_empty_stop_id")
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": {
+                        "code": "INVALID_STOP_ID",
+                        "message": "Stop ID cannot be empty",
+                        "details": {}
+                    }
+                }
+            )
+
+        # Verify stop exists in database
+        stop_check = supabase.table("stops").select("stop_id, stop_name").eq("stop_id", stop_id).execute()
+        if not stop_check.data:
+            logger.warning("stop_not_found", stop_id=stop_id)
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": {
+                        "code": "STOP_NOT_FOUND",
+                        "message": f"Stop with ID '{stop_id}' does not exist in database",
+                        "details": {"stop_id": stop_id}
+                    }
+                }
+            )
+
+        # Default time to now (seconds since midnight Sydney)
+        if time_param is None:
+            sydney_tz = pytz.timezone('Australia/Sydney')
+            now = datetime.now(sydney_tz)
+            midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            time_secs = int((now - midnight).total_seconds())
+        else:
+            time_secs = time_param
+
+
+══════════════════════════════════════════════════════════════
+File: backend/app/services/realtime_service.py (Lines 140-203)
+══════════════════════════════════════════════════════════════
+
+        # Step 1: Fetch static schedules (phase 1 query)
+        # Calculate actual departure time: trip_start_time + offset_secs
+        # Bidirectional: >= time for future, <= time for past
+        time_filter = f">= {time_secs_local}" if direction == "future" else f"<= {time_secs_local}"
+        sort_order = "ASC" if direction == "future" else "DESC"
+
+        # Expand SQL LIMIT to capture delayed trains outside user window
+        # RT delays can push scheduled departures into realtime window (e.g., 07:15 scheduled → 07:42 delayed)
+        # Fetch 3x user limit to ensure delayed trains included, then sort/trim after RT merge
+        expanded_limit = max(limit * 3, 30)
+
+        query = f"""
+        SELECT
+            t.trip_id,
+            t.trip_headsign,
+            t.direction_id,
+            t.wheelchair_accessible,
+            t.start_time_secs,
+            r.route_id,
+            r.route_short_name,
+            r.route_long_name,
+            r.route_type,
+            r.route_color,
+            ps.departure_offset_secs,
+            ps.stop_sequence,
+            (t.start_time_secs + ps.departure_offset_secs) as actual_departure_secs
+        FROM pattern_stops ps
+        JOIN patterns p ON ps.pattern_id = p.pattern_id
+        JOIN trips t ON t.pattern_id = p.pattern_id
+        JOIN routes r ON t.route_id = r.route_id
+        JOIN calendar c ON t.service_id = c.service_id
+        WHERE ps.stop_id = '{stop_id}'
+          AND c.start_date <= '{service_date}'
+          AND c.end_date >= '{service_date}'
+          AND (t.start_time_secs + ps.departure_offset_secs) {time_filter}
+        ORDER BY (t.start_time_secs + ps.departure_offset_secs) {sort_order}
+        LIMIT {expanded_limit}
+        """
+
+        result = supabase.rpc("exec_raw_sql", {"query": query}).execute()
+        static_deps = result.data or []
+
+        if not static_deps:
+            # Enhanced diagnostics: distinguish stop_not_found vs no_trips_scheduled
+            # Check if stop exists in stops table
+            stop_exists_result = supabase.table("stops").select("stop_id").eq("stop_id", stop_id).execute()
+            stop_exists = len(stop_exists_result.data) > 0 if stop_exists_result.data else False
+
+            # Check pattern_stops count for this stop (are there ANY trips for this stop?)
+            pattern_count_query = f"SELECT COUNT(*) as count FROM pattern_stops WHERE stop_id = '{stop_id}'"
+            pattern_count_result = supabase.rpc("exec_raw_sql", {"query": pattern_count_query}).execute()
+            pattern_stops_count = pattern_count_result.data[0]["count"] if pattern_count_result.data else 0
+
+            logger.warning(
+                "no_static_departures",
+                stop_id=stop_id,
+                stop_exists=stop_exists,
+                pattern_stops_count=pattern_stops_count,
+                service_date=service_date,
+                time_secs=time_secs_local
+            )
+            return []
+
+
+══════════════════════════════════════════════════════════════
+File: backend/app/tasks/gtfs_rt_poller.py (Lines 325-375)
+══════════════════════════════════════════════════════════════
+
+@celery_app.task(
+    name="app.tasks.gtfs_rt_poller.poll_gtfs_rt",
+    queue="critical",
+    bind=True,
+    max_retries=0,  # No retries - next schedule tick handles it
+    time_limit=15,  # Hard timeout
+    soft_time_limit=10,  # Soft timeout
+)
+def poll_gtfs_rt(self):
+    """Poll NSW GTFS-RT feeds for all modes.
+
+    Fetches VehiclePositions, TripUpdates, and ServiceAlerts for 5 modes (15 API calls total).
+    Uses Redis SETNX lock for idempotency.
+
+    Cache keys:
+    - vp:{mode}:v1 (TTL 75s) - Vehicle positions
+    - tu:{mode}:v1 (TTL 90s) - Trip updates
+    - sa:{mode}:v1 (TTL 90s) - Service alerts
+    """
+    start_time = time.time()
+    redis_client = get_redis_client()
+
+    # Acquire singleton lock (30s TTL, auto-expires if worker crashes)
+    lock_key = "lock:poll_gtfs_rt"
+    lock_acquired = redis_client.set(lock_key, "1", nx=True, ex=30)
+
+    if not lock_acquired:
+        logger.info("poll_gtfs_rt_skipped", reason="already_running")
+        return
+
+    try:
+        logger.info("poll_gtfs_rt_started", timestamp=int(start_time))
+
+        vp_count = 0
+        tu_count = 0
+        modes = list(MODES_CONFIG.keys())
+
+        for mode in modes:
+            # Fetch VehiclePositions
+            vp_data = fetch_gtfs_rt(mode, "vehiclepos")
+            if vp_data:
+                parsed_vp = parse_vehicle_positions(vp_data)
+                if parsed_vp:
+                    cache_key = f"vp:{mode}:v1"
+                    if cache_blob(redis_client, cache_key, parsed_vp, ttl=75):
+                        vp_count += len(parsed_vp)
+                        logger.debug("vp_cached", mode=mode, count=len(parsed_vp), key=cache_key)
+
+            # Fetch TripUpdates
+            tu_data = fetch_gtfs_rt(mode, "realtime")
+            if tu_data:
+                parsed_tu = parse_trip_updates(tu_data)
+                if parsed_tu:
+                    cache_key = f"tu:{mode}:v1"
+                    if cache_blob(redis_client, cache_key, parsed_tu, ttl=90):
+                        tu_count += len(parsed_tu)
+                        logger.debug("tu_cached", mode=mode, count=len(parsed_tu), key=cache_key)
+
+
+══════════════════════════════════════════════════════════════
+File: docs/architecture/IOS_APP_SPECIFICATION.md (Section 8: Offline Strategy)
+══════════════════════════════════════════════════════════════
+
+## 8. Offline Strategy
+
+### 8.1 What Works Offline
+
+✅ **Fully offline:**
+- Browse stops/routes (local GRDB)
+- Search stops by name
+- View static schedules
+- View favorites
+
+❌ **Requires network:**
+- Real-time departures
+- Trip planning
+- Live vehicle positions
+- Service alerts
+
+### 8.2 Offline UI Indicators
+
+```swift
+struct OfflineBanner: View {
+    @Environment(\.networkStatus) var networkStatus
+
+    var body: some View {
+        if !networkStatus.isConnected {
+            HStack {
+                Image(systemName: "wifi.slash")
+                Text("You're offline. Showing cached data.")
+            }
+            .padding()
+            .background(Color.orange.opacity(0.2))
+        }
+    }
+}
+```
+
+
+══════════════════════════════════════════════════════════════
+File: docs/architecture/BACKEND_SPECIFICATION.md (Section 3.2)
+══════════════════════════════════════════════════════════════
+
+#### GET /api/v1/stops/{stop_id}/departures
+**Purpose:** Get next departures for a stop with real-time delays
+
+**Path Parameters:**
+- `stop_id`: string (GTFS stop_id)
+
+**Query Parameters:**
+```python
+limit: int = 5      # Number of departures (default 5, max 20)
+include_alerts: bool = True  # Include relevant service alerts
+```
+
+**Response:**
+```json
+{
+  "stop_id": "200060",
+  "stop_name": "Central Station",
+  "as_of": "2025-11-12T08:15:30+11:00",
+  "stale": false,
+  "departures": [
+    {
+      "route_short_name": "T1",
+      "route_long_name": "North Shore Line",
+      "headsign": "Hornsby",
+      "scheduled_time": "2025-11-12T08:18:00+11:00",
+      "realtime": true,
+      "delay_seconds": 120,
+      "estimated_time": "2025-11-12T08:20:00+11:00",
+      "countdown_minutes": 4,
+      "trip_id": "trip_12345",
+      "platform": "4"
+    }
+  ],
+  "alerts": [
+    {
+      "alert_id": "alert_001",
+      "severity": "warning",
+      "header": "Delays on T1 Line",
+      "description": "Expect delays of up to 10 minutes due to signal failure."
+    }
+  ]
+}
+```
+
+**Performance Target:** <200ms p95
+
+
+══════════════════════════════════════════════════════════════
+File: docs/standards/DEVELOPMENT_STANDARDS.md (Section 4: Repository Pattern)
+══════════════════════════════════════════════════════════════
+
+### Repository Pattern (Protocol-Based)
+
+**Protocol Definition:**
+```swift
+// Data/Repositories/StopRepository.swift
+protocol StopRepository {
+    func fetchStop(id: String) async throws -> Stop
+    func searchStops(query: String, limit: Int) async throws -> [Stop]
+    func nearbyStops(latitude: Double, longitude: Double, radius: Int) async throws -> [Stop]
+}
+
+class StopRepositoryImpl: StopRepository {
+    private let apiClient: APIClient
+    private let dbManager: DatabaseManager
+
+    init(apiClient: APIClient, dbManager: DatabaseManager) {
+        self.apiClient = apiClient
+        self.dbManager = dbManager
+    }
+
+    func fetchStop(id: String) async throws -> Stop {
+        // Try DB first (offline support)
+        if let stop = try dbManager.read({ db in
+            try Stop.fetchOne(db, key: id)
+        }) {
+            return stop
+        }
+        // Fallback to API
+        return try await apiClient.request(.getStop(id: id))
+    }
+}
+```
+
+**Why Protocol:** Enables dependency injection, testability (mock repositories in tests)
+
+
+## TOKEN BUDGET
+
+Target: <35,000 tokens
+Actual: ~28,500 tokens (estimated from file sizes / 3.5)
+Priority: Root cause analysis + implementation files > architecture specs
+Strategy: Included full critical files, extracted key sections from specs
+
+## CONTEXT FOR ORACLE
+
+**Current Git State:**
+- Branch: main
+- Recent fix: bc15753 "fix: Add offline fallback to fetchDeparturesPage()" (NOT APPLIED - iOS files missing)
+- Status: iOS offline fallback not implemented
+
+**Phase Status:**
+- Phase 1 (Static data): INCOMPLETE - Supabase tables empty
+- Phase 2 (Real-time): IMPLEMENTED - RT poller works, data exists in Redis
+- Issue: Phase 2 built on incomplete Phase 1, violates decoupling
+
+**Key Constraints:**
+- Solo dev, $25/mo budget
+- Stack fixed (no new services)
+- Offline-first requirement
+- NSW API: 5 req/s limit
+
+**Oracle Focus:**
+1. How to decouple Layer 2 (Supabase) from Layer 3 (Redis RT)?
+2. Should RT data work standalone (RT-only mode) if Supabase empty?
+3. iOS offline-first: Try GRDB first or after API fails? (need to implement iOS files first)
+4. Phase validation: How to enforce acceptance criteria gates?
+5. Testing strategy for 3-layer fallback validation?
+
+**Critical Observation:**
+- iOS implementation files MISSING (DeparturesRepository.swift, DatabaseManager.swift)
+- Cannot verify iOS offline-first pattern until files created
+- Backend coupling violation is primary blocker
+- Phase 1 completion (Supabase tables populated) is secondary blocker
