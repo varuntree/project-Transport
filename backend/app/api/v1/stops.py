@@ -15,6 +15,7 @@ from app.models.stops import (
     RouteInStop
 )
 from app.services.realtime_service import get_realtime_departures, get_stop_earliest_departure
+from app.services.alert_service import get_alert_service
 from app.utils.logging import get_logger
 from supabase import Client
 
@@ -363,6 +364,89 @@ async def get_departures(
                 "error": {
                     "code": "DEPARTURES_FETCH_FAILED",
                     "message": f"Failed to fetch departures: {str(e)}",
+                    "details": {}
+                }
+            }
+        )
+
+@router.get("/{stop_id}/alerts")
+async def get_stop_alerts(
+    stop_id: str,
+    supabase: Client = Depends(get_supabase)
+):
+    """Get active service alerts for a stop.
+
+    Fetches ServiceAlerts from Redis (sa:{mode}:v1 blobs) and filters by:
+    - informed_entity.stop_id matches requested stop_id
+    - active_period includes current time
+
+    Graceful degradation: Returns empty array if Redis unavailable.
+
+    Returns:
+        {
+            "data": {
+                "alerts": [...],
+                "count": N
+            },
+            "meta": {
+                "stop_id": "200060",
+                "at": 1732253100
+            }
+        }
+    """
+    start_time = time.time()
+
+    try:
+        # Validate stop exists (consistent with departures endpoint)
+        stop_check = supabase.table("stops").select("stop_id, stop_name").eq("stop_id", stop_id).execute()
+        if not stop_check.data:
+            logger.warning("stop_not_found", stop_id=stop_id)
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": {
+                        "code": "STOP_NOT_FOUND",
+                        "message": f"Stop with ID '{stop_id}' does not exist",
+                        "details": {"stop_id": stop_id}
+                    }
+                }
+            )
+
+        # Fetch alerts from Redis
+        alert_service = get_alert_service()
+        alerts = alert_service.get_alerts_for_stop(stop_id)
+
+        duration_ms = int((time.time() - start_time) * 1000)
+        logger.info("stop_alerts_fetched",
+                   stop_id=stop_id,
+                   alert_count=len(alerts),
+                   duration_ms=duration_ms)
+
+        return {
+            "data": {
+                "alerts": alerts,
+                "count": len(alerts)
+            },
+            "meta": {
+                "stop_id": stop_id,
+                "at": int(time.time())
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        duration_ms = int((time.time() - start_time) * 1000)
+        logger.error("stop_alerts_failed",
+                    stop_id=stop_id,
+                    error=str(e),
+                    duration_ms=duration_ms)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": {
+                    "code": "ALERTS_FETCH_FAILED",
+                    "message": f"Failed to fetch alerts: {str(e)}",
                     "details": {}
                 }
             }
