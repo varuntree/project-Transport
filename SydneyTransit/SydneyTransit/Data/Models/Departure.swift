@@ -13,9 +13,10 @@ struct Departure: Codable, Identifiable, Hashable {
     let platform: String?
     let wheelchairAccessible: Int
     let occupancy_status: Int?
+    let stopSequence: Int
 
-    // Unique ID: trip can visit same stop multiple times, so use trip_id + scheduled_time
-    var id: String { "\(tripId)_\(scheduledTimeSecs)" }
+    // Unique ID: trip can visit same stop multiple times, so use trip_id + scheduled_time + stop_sequence
+    var id: String { "\(tripId)_\(scheduledTimeSecs)_\(stopSequence)" }
 
     // Computed: user-facing countdown text
     var minutesUntilText: String {
@@ -104,6 +105,7 @@ struct Departure: Codable, Identifiable, Hashable {
         case platform
         case wheelchairAccessible = "wheelchair_accessible"
         case occupancy_status = "occupancy_status"
+        case stopSequence = "stop_sequence"
     }
 
     // Memberwise initializer used by offline GRDB fallback (DatabaseManager).
@@ -118,7 +120,8 @@ struct Departure: Codable, Identifiable, Hashable {
         realtime: Bool,
         platform: String?,
         wheelchairAccessible: Int,
-        occupancy_status: Int?
+        occupancy_status: Int?,
+        stopSequence: Int
     ) {
         self.tripId = tripId
         self.routeShortName = routeShortName
@@ -131,6 +134,7 @@ struct Departure: Codable, Identifiable, Hashable {
         self.platform = platform
         self.wheelchairAccessible = wheelchairAccessible
         self.occupancy_status = occupancy_status
+        self.stopSequence = stopSequence
     }
 
     // Custom decoding to be resilient to missing or null fields from the backend.
@@ -167,5 +171,6 @@ struct Departure: Codable, Identifiable, Hashable {
 
         wheelchairAccessible = try container.decodeIfPresent(Int.self, forKey: .wheelchairAccessible) ?? 0
         occupancy_status = try container.decodeIfPresent(Int.self, forKey: .occupancy_status)
+        stopSequence = try container.decodeIfPresent(Int.self, forKey: .stopSequence) ?? 0
     }
 }

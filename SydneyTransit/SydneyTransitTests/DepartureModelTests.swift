@@ -26,7 +26,8 @@ final class DepartureModelTests: XCTestCase {
                 realtime: false,
                 platform: nil,
                 wheelchairAccessible: 0,
-                occupancy_status: mapping.status
+                occupancy_status: mapping.status,
+                stopSequence: 0
             )
 
             let icon = try XCTUnwrap(departure.occupancyIcon, "Expected occupancy icon for status \(mapping.status)")

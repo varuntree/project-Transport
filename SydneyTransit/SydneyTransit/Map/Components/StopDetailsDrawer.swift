@@ -214,11 +214,13 @@ struct DepartureCompactRow: View {
             headsign: "Parramatta",
             scheduledTimeSecs: 36000,
             realtimeTimeSecs: 36000,
+            minutesUntil: 5,
             delayS: 0,
             realtime: false,
             platform: "1",
             wheelchairAccessible: 1,
-            occupancy_status: nil
+            occupancy_status: nil,
+            stopSequence: 0
         ),
         Departure(
             tripId: "trip2",
@@ -226,15 +228,17 @@ struct DepartureCompactRow: View {
             headsign: "Bondi Junction",
             scheduledTimeSecs: 36300,
             realtimeTimeSecs: 36300,
+            minutesUntil: 10,
             delayS: 0,
             realtime: false,
             platform: "2",
             wheelchairAccessible: 1,
-            occupancy_status: nil
+            occupancy_status: nil,
+            stopSequence: 0
         )
     ]
 
-    return StopDetailsDrawer(
+    StopDetailsDrawer(
         stop: mockStop,
         departures: mockDepartures,
         isLoading: false,

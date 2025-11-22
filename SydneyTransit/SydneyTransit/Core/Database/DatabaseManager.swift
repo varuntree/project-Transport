@@ -267,7 +267,8 @@ class DatabaseManager {
                         realtime: false,
                         platform: nil,
                         wheelchairAccessible: row.wheelchairAccessible ?? 0,
-                        occupancy_status: nil
+                        occupancy_status: nil,
+                        stopSequence: 0
                     )
                 }
 

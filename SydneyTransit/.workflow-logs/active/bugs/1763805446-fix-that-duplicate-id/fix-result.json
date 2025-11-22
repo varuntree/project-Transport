@@ -1,0 +1,41 @@
+{
+  "status": "fixed",
+  "fix_applied": {
+    "approach": "Added stopSequence field to Departure model, included in ID generation",
+    "files_modified": [
+      "SydneyTransit/Data/Models/Departure.swift",
+      "SydneyTransit/Map/Components/StopDetailsDrawer.swift",
+      "SydneyTransit/Core/Database/DatabaseManager.swift",
+      "SydneyTransit/Features/Map/Components/StopDetailsDrawer.swift",
+      "SydneyTransitTests/DepartureModelTests.swift"
+    ],
+    "diff_summary": "+6 lines in Departure.swift: property, ID update, CodingKeys, init param, init body, decoder; +5 lines in other files: stopSequence: 0 defaults",
+    "patterns_followed": [
+      "Existing Departure model pattern",
+      "CodingKeys snake_case mapping",
+      "Resilient decoding with defaults",
+      "Updated all memberwise init call sites"
+    ]
+  },
+  "validation": {
+    "compile_check": "passed",
+    "manual_trace": "Circular routes now create unique IDs: tripId_scheduledTimeSecs_1 vs tripId_scheduledTimeSecs_15 - no collision. Backend sends stop_sequence, iOS now decodes it and includes in ID.",
+    "risks_mitigated": [
+      "If backend omits stop_sequence, defaults to 0 (resilient decoding pattern)",
+      "ID format change doesn't persist (only for ForEach rendering)",
+      "Maintains backward compatibility (all existing fields unchanged)",
+      "All existing init call sites updated with stopSequence: 0 for mock/offline data"
+    ],
+    "test_plan": [
+      "Build app with xcodebuild - PASSED",
+      "Manual: Open app in simulator",
+      "Search for Central Station",
+      "Tap platform stop (e.g., Platform 16)",
+      "Check Xcode console - verify no duplicate ID errors",
+      "Verify departure list displays correctly with no duplicate rows",
+      "Test with circular routes that visit same stop multiple times"
+    ]
+  },
+  "confidence": 0.95,
+  "blockers": []
+}

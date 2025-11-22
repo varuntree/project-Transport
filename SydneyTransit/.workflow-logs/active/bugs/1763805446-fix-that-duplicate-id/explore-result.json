@@ -1,0 +1,183 @@
+{
+  "data_flow": [
+    {
+      "layer": "Backend Database",
+      "component": "Supabase pattern_stops + trips JOIN",
+      "file": "backend/app/services/realtime_service.py (commit cd01d48)",
+      "line_range": "SQL query ~L150-175",
+      "purpose": "Fetches static departures by joining pattern_stops → patterns → trips → routes → calendar. CRITICAL: A trip can visit same stop multiple times (circular routes, stop appears multiple times in pattern_stops with different stop_sequence). Query doesn't enforce uniqueness on (trip_id, scheduled_time_secs)."
+    },
+    {
+      "layer": "Backend API",
+      "component": "realtime_service.get_realtime_departures()",
+      "file": "backend/app/services/realtime_service.py",
+      "line_range": "~L90-250",
+      "purpose": "Merges static schedule with Redis RT delays. Creates departure dicts with trip_id, scheduled_time_secs. No deduplication on (trip_id + scheduled_time) - relies on SQL query uniqueness (which doesn't exist for circular routes)."
+    },
+    {
+      "layer": "Backend API",
+      "component": "stops.py /stops/{stop_id}/departures endpoint",
+      "file": "backend/app/api/v1/stops.py (commit cd01d48)",
+      "line_range": "~L150-200",
+      "purpose": "Calls get_departures_page() → get_realtime_departures(), returns JSON with departures array. No backend deduplication."
+    },
+    {
+      "layer": "iOS Network",
+      "component": "DeparturesRepository.fetchDeparturesPage()",
+      "file": "SydneyTransit/Data/Repositories/DeparturesRepository.swift",
+      "line_range": "88-157",
+      "purpose": "Fetches departures from API, decodes to [Departure]. No deduplication - passes raw backend array to ViewModel."
+    },
+    {
+      "layer": "iOS Business Logic",
+      "component": "DeparturesViewModel deduplication",
+      "file": "SydneyTransit/Features/Departures/DeparturesViewModel.swift",
+      "line_range": "17, 49, 102, 106, 136, 140, 207",
+      "purpose": "PARTIAL FIX: loadedDepartureIds tracks Departure.id to prevent duplicates during pagination. BUT: Initial load (L49) and merge logic (L207) don't deduplicate if backend returns duplicates in SAME response. Only filters during append operations."
+    },
+    {
+      "layer": "iOS Data Model",
+      "component": "Departure.id generation",
+      "file": "SydneyTransit/Data/Models/Departure.swift",
+      "line_range": "18",
+      "purpose": "Generates ID as '{tripId}_{scheduledTimeSecs}'. ASSUMES backend never returns same (tripId, scheduledTimeSecs) twice. Assumption breaks for circular routes where trip visits same stop multiple times at same scheduled time offset."
+    },
+    {
+      "layer": "iOS UI",
+      "component": "DeparturesView ForEach",
+      "file": "SydneyTransit/Features/Departures/DeparturesView.swift",
+      "line_range": "116",
+      "purpose": "ForEach(viewModel.departures) uses Departure.id. SwiftUI throws runtime error when duplicate IDs detected."
+    },
+    {
+      "layer": "iOS UI",
+      "component": "StopDetailsDrawer ForEach (Map drawer)",
+      "file": "SydneyTransit/Map/Components/StopDetailsDrawer.swift",
+      "line_range": "80, 105, 141",
+      "purpose": "Three ForEach loops using Departure.id (prefix 3, prefix 20). Same duplicate ID issue."
+    },
+    {
+      "layer": "iOS UI",
+      "component": "StopDetailsDrawer ForEach (older version)",
+      "file": "SydneyTransit/Map/Components/StopDetailsDrawer.swift (legacy)",
+      "line_range": "80",
+      "purpose": "Older version without service alerts, same ForEach pattern."
+    }
+  ],
+  "relevant_files": [
+    {
+      "path": "SydneyTransit/Data/Models/Departure.swift",
+      "reason": "Defines ID generation logic (tripId_scheduledTimeSecs). Root cause: ID format insufficient for circular routes.",
+      "critical_sections": [
+        "L18: var id: String { \"\\(tripId)_\\(scheduledTimeSecs)\" }",
+        "L4-15: Departure struct fields (no stop_sequence field despite backend returning it)"
+      ]
+    },
+    {
+      "path": "SydneyTransit/Features/Departures/DeparturesViewModel.swift",
+      "reason": "Manages departure list state, has partial deduplication but misses same-response duplicates",
+      "critical_sections": [
+        "L17: loadedDepartureIds = Set<String>() - tracks IDs for deduplication",
+        "L49: loadedDepartureIds = Set(page.departures.map { $0.id }) - NO deduplication on initial load",
+        "L102: filter { !loadedDepartureIds.contains($0.id) } - deduplicates pagination appends",
+        "L207: loadedDepartureIds = Set(merged.map { $0.id }) - merge recalculates but doesn't filter initial duplicates"
+      ]
+    },
+    {
+      "path": "SydneyTransit/Features/Departures/DeparturesView.swift",
+      "reason": "UI layer where duplicate ID error surfaces",
+      "critical_sections": [
+        "L116: ForEach(viewModel.departures) { departure in ... } - SwiftUI error source"
+      ]
+    },
+    {
+      "path": "SydneyTransit/Map/Components/StopDetailsDrawer.swift",
+      "reason": "Map drawer also iterates departures, same duplicate risk",
+      "critical_sections": [
+        "L80, L105, L141: Three ForEach(departures) loops using Departure.id"
+      ]
+    },
+    {
+      "path": "SydneyTransit/Data/Repositories/DeparturesRepository.swift",
+      "reason": "Network layer between API and ViewModel, passes data through without deduplication",
+      "critical_sections": [
+        "L117-124: Returns DeparturesPage with raw departures array from API"
+      ]
+    },
+    {
+      "path": "backend/app/services/realtime_service.py (via git cd01d48)",
+      "reason": "Backend source of duplicates - SQL query allows multiple rows for same (trip_id, scheduled_time)",
+      "critical_sections": [
+        "SQL query L150-175: JOIN pattern_stops → trips without DISTINCT or GROUP BY",
+        "L260-280: Creates departure dicts without checking for duplicates"
+      ]
+    },
+    {
+      "path": "backend/app/api/v1/stops.py (via git cd01d48)",
+      "reason": "API endpoint that calls realtime_service, no validation/deduplication",
+      "critical_sections": [
+        "L150-200: /stops/{stop_id}/departures endpoint"
+      ]
+    },
+    {
+      "path": "SydneyTransit/Core/Database/DatabaseManager.swift",
+      "reason": "Offline fallback also queries pattern_stops, same duplicate potential",
+      "critical_sections": [
+        "L193-213: Offline getDepartures() SQL query - same pattern_stops JOIN structure"
+      ]
+    }
+  ],
+  "duplicate_analysis": {
+    "duplicate_id_example": "sydneytrains_124R.953.141.2.A.8.87306546_72000",
+    "id_format": "tripId_scheduledTimeSecs",
+    "id_components": {
+      "tripId": "sydneytrains_124R.953.141.2.A.8.87306546",
+      "scheduledTimeSecs": "72000 (20:00:00 in HH:MM:SS)"
+    },
+    "why_duplicates_possible": [
+      "GTFS pattern model: pattern_stops table contains multiple entries for same stop if trip visits it multiple times (circular routes, express/all-stops variants)",
+      "SQL query joins pattern_stops → patterns → trips without DISTINCT or GROUP BY on (trip_id, scheduled_time)",
+      "Example: Circular bus route 124R visits stop X at positions 5 and 15 in pattern. Same trip_id, different stop_sequence, but if trip timing creates same scheduled_time_secs at both visits → duplicate ID",
+      "Backend creates one departure dict per pattern_stops row, doesn't deduplicate on (trip_id, scheduled_time)",
+      "iOS Departure.id only uses tripId + scheduledTimeSecs, doesn't include stop_sequence to differentiate multiple visits"
+    ],
+    "tripId_structure": "Format appears to be {mode}_{routeVariant}.{patternId} based on GTFS trip_id encoding",
+    "missing_uniqueness_field": "stop_sequence - backend returns it but iOS Departure model doesn't include it, and ID generation doesn't use it"
+  },
+  "previous_fixes": [
+    {
+      "commit": "14207b2",
+      "date": "2025-11-18",
+      "description": "Changed Departure.id from 'tripId' to 'tripId_scheduledTimeSecs' to handle trips visiting same stop multiple times at different times. Fixed 'buses_2394373 occurs multiple times' error.",
+      "limitation": "Only fixed case where same trip visits stop at DIFFERENT times. Didn't handle circular routes where trip visits same stop at SAME scheduled time (different stop_sequence)."
+    },
+    {
+      "commit": "cd01d48",
+      "date": "2025-11-22",
+      "description": "Fixed DeparturesViewModel merge logic to prevent list jumping, added offline mode banner. Changed deduplication from loadedTripIds to loadedDepartureIds.",
+      "limitation": "Deduplication only filters during pagination appends, not initial load. If backend returns duplicates in same response, they pass through to UI."
+    }
+  ],
+  "exploration_summary": "Traced duplicate ID bug through 9 files across 5 layers (Backend DB → Backend API → iOS Network → iOS Business Logic → iOS UI). Root cause: GTFS pattern model allows same trip to visit same stop multiple times (circular routes). Backend SQL query (pattern_stops JOIN trips) doesn't deduplicate on (trip_id, scheduled_time), can return duplicate rows. iOS Departure.id uses 'tripId_scheduledTimeSecs' but circular routes can create same (tripId, scheduledTime) with different stop_sequence. Backend returns stop_sequence but iOS model doesn't use it. Previous fix (14207b2) solved different-time duplicates but not same-time duplicates. Current fix needed: Either (1) add stop_sequence to iOS Departure.id, (2) backend deduplication, or (3) iOS ViewModel deduplication on initial load.",
+  "gaps": [
+    {
+      "question": "Does backend actually return stop_sequence in API response?",
+      "status": "CONFIRMED - backend code shows 'stop_sequence': dep['stop_sequence'] in departure dict creation (L280)"
+    },
+    {
+      "question": "Why doesn't iOS Departure model include stopSequence field?",
+      "status": "SCHEMA MISMATCH - Backend returns it but iOS Codable struct doesn't have stopSequence property, so it's silently dropped during JSON decoding"
+    },
+    {
+      "question": "Can we verify circular route scenario with actual GTFS data?",
+      "status": "NOT VERIFIED - would need to query actual Supabase pattern_stops table to find examples of same stop appearing multiple times in same pattern"
+    }
+  ],
+  "next_steps": [
+    "Stage 3 (Diagnose): Verify if backend returns stop_sequence in actual API response JSON",
+    "Stage 3: Check if circular routes exist in Sydney transit (e.g., route 124R in error message)",
+    "Stage 4 (Fix): Add stopSequence to iOS Departure model and include in ID: 'tripId_scheduledTimeSecs_stopSequence'",
+    "Stage 4 (Alternative): Add backend DISTINCT ON (trip_id, scheduled_time_secs) to prevent duplicates at source",
+    "Stage 4 (Defensive): Add iOS ViewModel deduplication on initial load to handle any backend duplicates"
+  ]
+}

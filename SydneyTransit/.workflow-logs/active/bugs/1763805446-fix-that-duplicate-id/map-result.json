@@ -1,0 +1,40 @@
+{
+  "bug_summary": "Departure.id generates duplicate IDs despite tripId_scheduledTimeSecs format - backend returns identical trip+time combinations",
+  "affected_phases": [
+    {
+      "phase": 2,
+      "confidence": 0.95,
+      "reason": "Real-time departures feature implemented in Phase 2, previous duplicate fix in commit 14207b2 during Phase 2"
+    }
+  ],
+  "affected_systems": [
+    {
+      "system": "iOS Departure Model",
+      "layer": "iOS Data",
+      "files": ["SydneyTransit/Data/Models/Departure.swift"]
+    },
+    {
+      "system": "DeparturesViewModel Deduplication",
+      "layer": "iOS Business Logic",
+      "files": ["SydneyTransit/Features/Departures/DeparturesViewModel.swift"]
+    },
+    {
+      "system": "Backend Departures API",
+      "layer": "Backend API",
+      "files": ["backend/app/api/v1/departures"]
+    },
+    {
+      "system": "DeparturesView ForEach",
+      "layer": "iOS UI",
+      "files": ["SydneyTransit/Features/Departures/DeparturesView.swift"]
+    },
+    {
+      "system": "StopDetailsDrawer ForEach",
+      "layer": "iOS UI",
+      "files": ["SydneyTransit/Map/Components/StopDetailsDrawer.swift"]
+    }
+  ],
+  "keywords": ["Departure", "id", "tripId", "scheduledTimeSecs", "ForEach", "duplicate", "sydneytrains_124R", "deduplication"],
+  "primary_phase": 2,
+  "search_summary": "Found 6 files with Departure struct, narrowed to 5 critical files. Previous fix (commit 14207b2) already changed ID to tripId_scheduledTimeSecs but duplicates persist, indicating backend data issue or ID generation insufficient."
+}

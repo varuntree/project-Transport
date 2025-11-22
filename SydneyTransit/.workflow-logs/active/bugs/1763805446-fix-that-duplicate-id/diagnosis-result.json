@@ -1,0 +1,98 @@
+{
+  "root_cause": {
+    "description": "Departure.id uses tripId_scheduledTimeSecs but GTFS allows circular routes where trips visit same stop multiple times at identical scheduled times, creating duplicate IDs. Backend returns stop_sequence (line 338 in realtime_service.py) but iOS model doesn't use it.",
+    "category": "logic_error",
+    "confidence": 0.98,
+    "evidence": [
+      "Line 17 in Departure.swift: ID format 'tripId_scheduledTimeSecs' missing stop_sequence",
+      "Backend line 338 in realtime_service.py returns 'stop_sequence' field in departure dict",
+      "iOS CodingKeys enum (lines 95-107) missing stopSequence mapping - field ignored during decode",
+      "GTFS specification allows circular routes where (trip_id, scheduled_time) repeats with different stop_sequence",
+      "Error shows duplicate ID: sydneytrains_124R.953.141.2.A.8.87306546_72000 (same trip, same time, different sequence)",
+      "Previous fix (14207b2) added scheduledTimeSecs to ID but insufficient for circular route pattern"
+    ],
+    "fundamental_cause": "ID generation assumes (trip_id, scheduled_time) is unique, but GTFS model requires (trip_id, scheduled_time, stop_sequence) for true uniqueness in circular routes"
+  },
+  "affected_layers": [
+    {
+      "layer": "iOS Model",
+      "file": "SydneyTransit/Data/Models/Departure.swift",
+      "lines": [17, 95-107, 110-122],
+      "issue": "Missing stopSequence property, CodingKeys entry, and ID format component despite backend providing field"
+    }
+  ],
+  "pattern_violations": [
+    {
+      "pattern": "Unique identifiers in GTFS data model",
+      "reference": "GTFS specification: (trip_id, stop_sequence, departure_time) forms composite key for stop_times table",
+      "violation": "iOS Departure.id only uses (trip_id, departure_time), omitting stop_sequence despite backend returning it"
+    },
+    {
+      "pattern": "iOS Model-Backend contract",
+      "reference": "Backend realtime_service.py line 338 includes stop_sequence in API response",
+      "violation": "iOS Departure struct missing stopSequence field and CodingKeys mapping, silently drops field during JSON decode"
+    }
+  ],
+  "recommended_fix": {
+    "approach": "Add stopSequence field to Departure model and include in ID generation",
+    "files_to_modify": [
+      "SydneyTransit/Data/Models/Departure.swift"
+    ],
+    "specific_changes": [
+      {
+        "line": 15,
+        "action": "Add after wheelchairAccessible",
+        "code": "let stopSequence: Int"
+      },
+      {
+        "line": 17,
+        "action": "Update ID format",
+        "before": "var id: String { \"\\(tripId)_\\(scheduledTimeSecs)\" }",
+        "after": "var id: String { \"\\(tripId)_\\(scheduledTimeSecs)_\\(stopSequence)\" }"
+      },
+      {
+        "line": 106,
+        "action": "Add to CodingKeys enum after occupancy_status",
+        "code": "case stopSequence = \"stop_sequence\""
+      },
+      {
+        "line": 121,
+        "action": "Add parameter to memberwise init after wheelchairAccessible",
+        "code": "stopSequence: Int,"
+      },
+      {
+        "line": 130,
+        "action": "Add assignment in init body after wheelchairAccessible assignment",
+        "code": "self.stopSequence = stopSequence"
+      }
+    ],
+    "estimated_complexity": "simple",
+    "risks": [
+      "Low risk: Backend confirmed to return stop_sequence field (line 338 in realtime_service.py)",
+      "No migration needed: ID format change doesn't persist, only used for ForEach rendering",
+      "Codable auto-synthesis may require explicit decoder if not using memberwise init during decode"
+    ]
+  },
+  "validation_plan": {
+    "reproduction_steps": [
+      "Open app, search for Central Station (or any stop with circular routes)",
+      "Tap platform stop with circular route pattern",
+      "Observe runtime error in Xcode console: 'ForEach<...>: the ID sydneytrains_124R.953.141.2.A.8.87306546_72000 occurs multiple times'"
+    ],
+    "fix_validation": [
+      "Apply fix to Departure.swift (add stopSequence field, update ID, add CodingKeys entry, update init)",
+      "Rebuild app in Xcode",
+      "Repeat reproduction steps",
+      "Verify no duplicate ID errors in console",
+      "Verify departure list displays all entries correctly (no missing trips)",
+      "Test pagination (scroll up/down) to ensure deduplication logic still works with new ID format"
+    ]
+  },
+  "backend_verification": {
+    "status": "confirmed",
+    "evidence": "Backend app/services/realtime_service.py line 338 explicitly includes 'stop_sequence': dep['stop_sequence'] in departure dict response",
+    "sql_query_line": 177,
+    "sql_select": "SELECT ... ps.stop_sequence ... FROM pattern_stops ps ...",
+    "api_contract": "Backend returns stop_sequence field; iOS must decode it"
+  }
+}
