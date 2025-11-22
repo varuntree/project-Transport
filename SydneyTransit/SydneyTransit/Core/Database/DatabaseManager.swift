@@ -262,6 +262,7 @@ class DatabaseManager {
                         headsign: row.headsign ?? "",
                         scheduledTimeSecs: sched,
                         realtimeTimeSecs: sched,
+                        minutesUntil: minutesUntil,
                         delayS: 0,
                         realtime: false,
                         platform: nil,

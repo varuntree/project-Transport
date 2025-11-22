@@ -21,6 +21,7 @@ final class DepartureModelTests: XCTestCase {
                 headsign: "Test",
                 scheduledTimeSecs: 0,
                 realtimeTimeSecs: 0,
+                minutesUntil: 0,
                 delayS: 0,
                 realtime: false,
                 platform: nil,
