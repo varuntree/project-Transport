@@ -1,0 +1,36 @@
+{
+  "status": "fixed",
+  "fix_applied": {
+    "approach": "Added /api/v1 prefix to Config.plist API_BASE_URL to match backend routing structure",
+    "files_modified": ["SydneyTransit/SydneyTransit/Config.plist"],
+    "diff_summary": "L6: http://localhost:8000 → http://localhost:8000/api/v1",
+    "patterns_followed": ["BACKEND_SPECIFICATION.md Section 3.2 - API routing with /api/v1 prefix"]
+  },
+  "validation": {
+    "compile_check": "passed",
+    "manual_trace": "iOS APIClient will now construct URLs as http://localhost:8000/api/v1 + /stops/{id}/departures → matches backend router prefix → should return 200 with departures",
+    "risks_mitigated": [
+      "XML syntax preserved (valid plist format)",
+      "Change only affects API calls (offline GRDB unaffected)",
+      "Backend confirmed running and responding at /api/v1/stops/... endpoints"
+    ],
+    "test_plan": [
+      "Manual: Clean Build Folder in Xcode (Cmd+Shift+K)",
+      "Manual: Rebuild iOS app (Cmd+B)",
+      "Manual: Run in iOS simulator (Cmd+R)",
+      "Manual: Search for stop (e.g., 'Central Station')",
+      "Manual: Tap stop from search results",
+      "Expected: Departures screen shows list of departures with times/route names",
+      "Verify: Check Xcode console for successful API log: http://localhost:8000/api/v1/stops/.../departures",
+      "Offline test: Stop backend (./backend/scripts/stop_all.sh), pull to refresh",
+      "Expected: Offline fallback shows GRDB departures (static schedule)"
+    ]
+  },
+  "confidence": 0.95,
+  "blockers": [],
+  "secondary_notes": [
+    "If departures still empty after fix: Investigate DatabaseManager time filtering (2-hour window may exclude GTFS schedules)",
+    "If offline fallback fails: Debug stop_id lookup in dict_stop table (L160) and pattern_stops query (L193-220)",
+    "Backend tested independently - confirmed working at /api/v1 endpoints"
+  ]
+}

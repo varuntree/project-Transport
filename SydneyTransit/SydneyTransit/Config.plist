@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>API_BASE_URL</key>
+	<string>http://localhost:8000/api/v1</string>
+	<key>SUPABASE_URL</key>
+	<string>https://bmbeysyzagecyqidvjbd.supabase.co</string>
+	<key>SUPABASE_ANON_KEY</key>
+	<string>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJtYmV5c3l6YWdlY3lxaWR2amJkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI5OTgyMTMsImV4cCI6MjA3ODU3NDIxM30.Lc6pCEisyunOAyUFzXJkvo6GwDpSgnTEYlBvoeidczM</string>
+	<key>LOG_LEVEL</key>
+	<string>debug</string>
+</dict>
+</plist>
