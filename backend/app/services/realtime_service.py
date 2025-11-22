@@ -147,7 +147,13 @@ def get_realtime_departures(
         # Step 1: Fetch static schedules (phase 1 query)
         # Calculate actual departure time: trip_start_time + offset_secs
         # Bidirectional: >= time for future, <= time for past
-        time_filter = f">= {time_secs_local}" if direction == "future" else f"<= {time_secs_local}"
+        # Use parameterized query to prevent SQL injection
+        # Params: [stop_id, service_date_gtfs, time_secs_local]
+        # $1->>0 is stop_id (text)
+        # $1->>1 is service_date_gtfs (text)
+        # $1->>2 is time_secs_local (int, cast to integer)
+        
+        operator = ">=" if direction == "future" else "<="
         sort_order = "ASC" if direction == "future" else "DESC"
 
         # Expand SQL LIMIT to capture delayed trains outside user window
@@ -175,15 +181,16 @@ def get_realtime_departures(
         JOIN trips t ON t.pattern_id = p.pattern_id
         JOIN routes r ON t.route_id = r.route_id
         JOIN calendar c ON t.service_id = c.service_id
-        WHERE ps.stop_id = '{stop_id}'
-          AND c.start_date <= '{service_date_gtfs}'
-          AND c.end_date >= '{service_date_gtfs}'
-          AND (t.start_time_secs + ps.departure_offset_secs) {time_filter}
+        WHERE ps.stop_id = ($1->>0)
+          AND c.start_date <= ($1->>1)
+          AND c.end_date >= ($1->>1)
+          AND (t.start_time_secs + ps.departure_offset_secs) {operator} ($1->>2)::integer
         ORDER BY (t.start_time_secs + ps.departure_offset_secs) {sort_order}
         LIMIT {expanded_limit}
         """
 
-        result = supabase.rpc("exec_raw_sql", {"query": query}).execute()
+        params = [stop_id, service_date_gtfs, time_secs_local]
+        result = supabase.rpc("exec_raw_sql", {"query": query, "params": params}).execute()
         static_deps = result.data or []
 
         if not static_deps:
@@ -193,8 +200,8 @@ def get_realtime_departures(
             stop_exists = len(stop_exists_result.data) > 0 if stop_exists_result.data else False
 
             # Check pattern_stops count for this stop (are there ANY trips for this stop?)
-            pattern_count_query = f"SELECT COUNT(*) as count FROM pattern_stops WHERE stop_id = '{stop_id}'"
-            pattern_count_result = supabase.rpc("exec_raw_sql", {"query": pattern_count_query}).execute()
+            pattern_count_query = "SELECT COUNT(*) as count FROM pattern_stops WHERE stop_id = ($1->>0)"
+            pattern_count_result = supabase.rpc("exec_raw_sql", {"query": pattern_count_query, "params": [stop_id]}).execute()
             pattern_stops_count = pattern_count_result.data[0]["count"] if pattern_count_result.data else 0
 
             logger.warning(

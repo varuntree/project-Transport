@@ -8,6 +8,7 @@ class DeparturesViewModel: ObservableObject {
     @Published var isLoadingPast = false
     @Published var isLoadingFuture = false
     @Published var errorMessage: String?
+    @Published var isOffline = false
 
     private var earliestTimeSecs: Int?
     private var latestTimeSecs: Int?
@@ -50,6 +51,7 @@ class DeparturesViewModel: ObservableObject {
             latestTimeSecs = page.latestTimeSecs
             hasMorePast = page.hasMorePast
             hasMoreFuture = page.hasMoreFuture
+            isOffline = page.isOffline
 
         } catch let error as URLError where error.code == .notConnectedToInternet {
             errorMessage = "No internet connection"
@@ -166,8 +168,7 @@ class DeparturesViewModel: ObservableObject {
 
     private func refreshDeparturesInPlace(stopId: String) async {
         // SLIDING WINDOW REFRESH: Fetch fresh departures from NOW forward
-        // This removes departed trains and adds new upcoming departures
-        // Critical fix: Window slides forward as time progresses (not static)
+        // MERGE with existing list to preserve "Past" items if user scrolled up
         
         do {
             // Calculate current time (Sydney timezone)
@@ -186,15 +187,40 @@ class DeparturesViewModel: ObservableObject {
                 limit: 15  // Match initial load size
             )
 
-            // Replace entire list with fresh departures
-            departures = page.departures
-            loadedDepartureIds = Set(page.departures.map { $0.id })
+            // MERGE LOGIC:
+            // 1. Identify new items
+            let newIds = Set(page.departures.map { $0.id })
+            
+            // 2. Keep existing items that are NOT in the new set (mostly past items)
+            // This preserves the "history" at the top of the list
+            let keptOldDepartures = self.departures.filter { !newIds.contains($0.id) }
+            
+            // 3. Combine: Kept Old + New Fresh
+            var merged = keptOldDepartures
+            merged.append(contentsOf: page.departures)
+            
+            // 4. Sort by time to ensure correct order
+            merged.sort { $0.realtimeTimeSecs < $1.realtimeTimeSecs }
+            
+            // 5. Update State
+            departures = merged
+            loadedDepartureIds = Set(merged.map { $0.id })
 
-            // UPDATE boundaries to new window (sliding forward)
-            earliestTimeSecs = page.earliestTimeSecs
-            latestTimeSecs = page.latestTimeSecs
+            // 6. Update boundaries (expand, don't shrink)
+            if let newEarliest = page.earliestTimeSecs {
+                // If we have existing earliest, keep the min (don't lose our past boundary)
+                earliestTimeSecs = min(earliestTimeSecs ?? newEarliest, newEarliest)
+            }
+            if let newLatest = page.latestTimeSecs {
+                // If we have existing latest, keep the max
+                latestTimeSecs = max(latestTimeSecs ?? newLatest, newLatest)
+            }
+            
+            // Update flags from the fresh page
+            // Note: hasMorePast from a "Future" query (starting at NOW) will usually be true
             hasMorePast = page.hasMorePast
             hasMoreFuture = page.hasMoreFuture
+            isOffline = page.isOffline
 
         } catch {
             // Silent fail (don't disrupt UX)

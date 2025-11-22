@@ -69,6 +69,20 @@ struct DeparturesView: View {
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding()
                 } else {
+                    // Offline Banner
+                    if viewModel.isOffline {
+                        HStack {
+                            Image(systemName: "wifi.slash")
+                            Text("Using offline schedule")
+                            Spacer()
+                        }
+                        .padding()
+                        .background(Color.orange.opacity(0.2))
+                        .foregroundColor(.orange)
+                        .cornerRadius(8)
+                        .padding(.horizontal)
+                    }
+
                     // Top sentinel for loading past departures
                     // CRITICAL FIX: Only trigger if initial load complete (prevents immediate trigger)
                     if viewModel.isLoadingPast {

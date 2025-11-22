@@ -7,6 +7,7 @@ struct DeparturesPage {
     let latestTimeSecs: Int?
     let hasMorePast: Bool
     let hasMoreFuture: Bool
+    let isOffline: Bool
 }
 
 protocol DeparturesRepository {
@@ -118,7 +119,8 @@ class DeparturesRepositoryImpl: DeparturesRepository {
                 earliestTimeSecs: response.data.earliestTimeSecs,
                 latestTimeSecs: response.data.latestTimeSecs,
                 hasMorePast: response.data.hasMorePast ?? false,
-                hasMoreFuture: response.data.hasMoreFuture ?? false
+                hasMoreFuture: response.data.hasMoreFuture ?? false,
+                isOffline: false
             )
 
         } catch {
@@ -148,7 +150,8 @@ class DeparturesRepositoryImpl: DeparturesRepository {
                 earliestTimeSecs: departures.first?.scheduledTimeSecs,
                 latestTimeSecs: departures.last?.scheduledTimeSecs,
                 hasMorePast: false,  // Offline has no pagination
-                hasMoreFuture: false
+                hasMoreFuture: false,
+                isOffline: true
             )
         }
     }

@@ -35,17 +35,25 @@ async def get_nearby_stops(
 
     try:
         # CRITICAL: PostGIS expects (lon, lat) not (lat, lon)!
-        query = f"""
+        # Use parameterized query to prevent SQL injection
+        # Params: [lon, lat, radius, limit]
+        # $1->>0 is lon (float)
+        # $1->>1 is lat (float)
+        # $1->>2 is radius (int)
+        # $1->>3 is limit (int)
+        
+        query = """
         SELECT stop_id, stop_name, stop_code, stop_lat, stop_lon,
                wheelchair_boarding, location_type, parent_station,
-               ST_Distance(location, ST_MakePoint({lon}, {lat})::geography) AS distance_meters
+               ST_Distance(location, ST_MakePoint(($1->>0)::numeric, ($1->>1)::numeric)::geography) AS distance_meters
         FROM stops
-        WHERE ST_DWithin(location::geography, ST_MakePoint({lon}, {lat})::geography, {radius})
+        WHERE ST_DWithin(location::geography, ST_MakePoint(($1->>0)::numeric, ($1->>1)::numeric)::geography, ($1->>2)::int)
         ORDER BY distance_meters ASC
-        LIMIT {limit}
+        LIMIT ($1->>3)::int
         """
 
-        result = supabase.rpc("exec_raw_sql", {"query": query}).execute()
+        params = [lon, lat, radius, limit]
+        result = supabase.rpc("exec_raw_sql", {"query": query, "params": params}).execute()
         stops = result.data or []
 
         duration_ms = int((time.time() - start_time) * 1000)
