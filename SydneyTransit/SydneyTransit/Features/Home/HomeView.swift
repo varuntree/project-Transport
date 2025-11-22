@@ -7,70 +7,85 @@ struct HomeView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 20) {
-                Text("Sydney Transit")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
+            ScrollView {
+                VStack(spacing: 20) {
+                    Text("Sydney Transit")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
 
-                Text("Phase 2: Real-time Departures")
-                    .font(.title3)
-                    .foregroundColor(.secondary)
+                    Text("Phase 2: Real-time Departures")
+                        .font(.title3)
+                        .foregroundColor(.secondary)
 
-                Divider()
-                    .padding(.vertical)
+                    Divider()
+                        .padding(.vertical)
 
-                // Integration test status
-                VStack(spacing: 10) {
-                    Text("Backend Status:")
-                        .font(.headline)
+                    // Integration test status
+                    VStack(spacing: 10) {
+                        Text("Backend Status:")
+                            .font(.headline)
 
-                    if isLoading {
-                        ProgressView()
-                    } else {
-                        Text(apiStatus)
-                            .font(.body)
-                            .foregroundColor(apiStatus.contains("Sydney Transit API") ? .green : .red)
+                        if isLoading {
+                            ProgressView()
+                        } else {
+                            Text(apiStatus)
+                                .font(.body)
+                                .foregroundColor(apiStatus.contains("Sydney Transit API") ? .green : .red)
+                        }
                     }
-                }
 
-                Divider()
-                    .padding(.vertical)
+                    Divider()
+                        .padding(.vertical)
 
-                // Phase 1: Search functionality
-                NavigationLink {
-                    SearchView()
-                } label: {
-                    HStack {
-                        Image(systemName: "magnifyingglass")
-                        Text("Search Stops")
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(.secondary)
+                    // Phase 1.5: Nearby Stops
+                    NearbyStopsSection()
+                        // Remove default padding from section since we have parent padding,
+                        // but NearbyStopsSection has horizontal padding inside empty states.
+                        // We might need to adjust padding.
+                        // Current NearbyStopsSection uses .padding(.horizontal) inside emptyState and stopsList uses padding.
+                        // If we put it in padded VStack, it gets double padding.
+                        // Let's modify HomeView to NOT have global padding, or adjust Section.
+                        // Easier to keep HomeView consistent.
+                    
+                    Divider()
+                        .padding(.vertical)
+
+                    // Phase 1: Search functionality
+                    NavigationLink {
+                        SearchView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "magnifyingglass")
+                            Text("Search Stops")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.secondary)
+                        }
+                        .padding()
+                        .background(Color(.systemGray6))
+                        .cornerRadius(10)
                     }
-                    .padding()
-                    .background(Color(.systemGray6))
-                    .cornerRadius(10)
-                }
+                    .padding(.horizontal) // Add padding here if we remove global padding
 
-                // Phase 1: Route list
-                NavigationLink {
-                    RouteListView()
-                } label: {
-                    HStack {
-                        Image(systemName: "tram.fill")
-                        Text("All Routes")
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(.secondary)
+                    // Phase 1: Route list
+                    NavigationLink {
+                        RouteListView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "tram.fill")
+                            Text("All Routes")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.secondary)
+                        }
+                        .padding()
+                        .background(Color(.systemGray6))
+                        .cornerRadius(10)
                     }
-                    .padding()
-                    .background(Color(.systemGray6))
-                    .cornerRadius(10)
+                    .padding(.horizontal)
                 }
-
-                Spacer()
+                .padding(.vertical) // Only vertical padding for the container
             }
-            .padding()
             .navigationTitle("Home")
             .task {
                 await fetchBackendStatus()

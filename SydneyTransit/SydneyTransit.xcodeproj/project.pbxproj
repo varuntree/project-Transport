@@ -13,7 +13,9 @@
 		AA0000000000000000000002 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000002 /* Assets.xcassets */; };
 		AA0000000000000000000003 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000003 /* Constants.swift */; };
 		AA0000000000000000000004 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000004 /* Logger.swift */; };
+		DEADBEEF0000000000000004 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEADBEEF0000000000000003 /* LocationManager.swift */; };
 		AA0000000000000000000005 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000005 /* HomeView.swift */; };
+		DEADBEEF0000000000000002 /* NearbyStopsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEADBEEF0000000000000001 /* NearbyStopsSection.swift */; };
 		AA0000000000000000000006 /* Config-Example.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000006 /* Config-Example.plist */; };
 		AA0000000000000000000007 /* Config.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000007 /* Config.plist */; };
 		AA0000000000000000000008 /* gtfs.db in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000008 /* gtfs.db */; };
@@ -54,7 +56,9 @@
 		BB0000000000000000000002 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		BB0000000000000000000003 /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
 		BB0000000000000000000004 /* Logger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logger.swift; sourceTree = "<group>"; };
+		DEADBEEF0000000000000003 /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
 		BB0000000000000000000005 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		DEADBEEF0000000000000001 /* NearbyStopsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components/NearbyStopsSection.swift; sourceTree = "<group>"; };
 		BB0000000000000000000006 /* Config-Example.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Config-Example.plist"; sourceTree = "<group>"; };
 		BB0000000000000000000007 /* Config.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Config.plist; sourceTree = "<group>"; };
 		BB0000000000000000000008 /* gtfs.db */ = {isa = PBXFileReference; lastKnownFileType = file; path = gtfs.db; sourceTree = "<group>"; };
@@ -153,6 +157,7 @@
 			children = (
 				BB0000000000000000000003 /* Constants.swift */,
 				BB0000000000000000000004 /* Logger.swift */,
+				DEADBEEF0000000000000003 /* LocationManager.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -161,6 +166,7 @@
 			isa = PBXGroup;
 			children = (
 				BB0000000000000000000005 /* HomeView.swift */,
+				DEADBEEF0000000000000001 /* NearbyStopsSection.swift */,
 			);
 			path = Home;
 			sourceTree = "<group>";
@@ -350,7 +356,9 @@
 				AA0000000000000000000001 /* SydneyTransitApp.swift in Sources */,
 				AA0000000000000000000003 /* Constants.swift in Sources */,
 				AA0000000000000000000004 /* Logger.swift in Sources */,
+				DEADBEEF0000000000000004 /* LocationManager.swift in Sources */,
 				AA0000000000000000000005 /* HomeView.swift in Sources */,
+				DEADBEEF0000000000000002 /* NearbyStopsSection.swift in Sources */,
 				AA0000000000000000000009 /* DatabaseManager.swift in Sources */,
 				AA0000000000000000000010 /* Stop.swift in Sources */,
 				AA0000000000000000000011 /* Route.swift in Sources */,
