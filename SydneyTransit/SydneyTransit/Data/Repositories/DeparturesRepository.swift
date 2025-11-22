@@ -115,15 +115,42 @@ class DeparturesRepositoryImpl: DeparturesRepository {
             let meta: MetaData
         }
 
-        let endpoint = APIEndpoint.getDepartures(stopId: stopId, timeSecs: timeSecs, direction: direction, limit: limit)
-        let response: Response = try await apiClient.request(endpoint)
+        do {
+            // Try API first (real-time data when available)
+            let endpoint = APIEndpoint.getDepartures(stopId: stopId, timeSecs: timeSecs, direction: direction, limit: limit)
+            let response: Response = try await apiClient.request(endpoint)
 
-        return DeparturesPage(
-            departures: response.data.departures,
-            earliestTimeSecs: response.meta.pagination?.earliestTimeSecs,
-            latestTimeSecs: response.meta.pagination?.latestTimeSecs,
-            hasMorePast: response.meta.pagination?.hasMorePast ?? false,
-            hasMoreFuture: response.meta.pagination?.hasMoreFuture ?? false
-        )
+            return DeparturesPage(
+                departures: response.data.departures,
+                earliestTimeSecs: response.meta.pagination?.earliestTimeSecs,
+                latestTimeSecs: response.meta.pagination?.latestTimeSecs,
+                hasMorePast: response.meta.pagination?.hasMorePast ?? false,
+                hasMoreFuture: response.meta.pagination?.hasMoreFuture ?? false
+            )
+
+        } catch {
+            // API failed - fallback to offline GRDB
+            logger.warning(
+                "API request failed, using offline data",
+                metadata: .from([
+                    "error": error.localizedDescription,
+                    "stop_id": stopId,
+                    "time_secs": timeSecs ?? 0,
+                    "direction": direction
+                ])
+            )
+
+            // Offline fallback: query bundled GRDB (no time/direction filtering support)
+            let departures = try DatabaseManager.shared.getDepartures(stopId: stopId, limit: limit)
+
+            // Return DeparturesPage with offline data (disable pagination)
+            return DeparturesPage(
+                departures: departures,
+                earliestTimeSecs: departures.first?.scheduledTimeSecs,
+                latestTimeSecs: departures.last?.scheduledTimeSecs,
+                hasMorePast: false,  // Offline has no pagination
+                hasMoreFuture: false
+            )
+        }
     }
 }
