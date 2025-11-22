@@ -37,7 +37,7 @@ bug_description: $1 (required: user description of bug)
 # Create bug log folder
 timestamp=$(date +%s)
 bug_slug=$(echo "$1" | tr '[:upper:]' '[:lower:]' | tr -s ' ' '-' | tr -cd '[:alnum:]-' | cut -c1-40)
-bug_folder=".workflow-logs/bugs/${timestamp}-${bug_slug}"
+bug_folder=".workflow-logs/active/bugs/${timestamp}-${bug_slug}"
 mkdir -p "${bug_folder}"
 
 # Save bug context
@@ -366,9 +366,9 @@ ACTIONS:
    - Verify pattern compliance (from explore_result.related_patterns)
 
    **Check Architecture Specs:**
-   - Backend bugs: oracle/specs/BACKEND_SPECIFICATION.md
-   - iOS bugs: oracle/specs/IOS_APP_SPECIFICATION.md
-   - Data bugs: oracle/specs/DATA_ARCHITECTURE.md
+   - Backend bugs: docs/architecture/BACKEND_SPECIFICATION.md
+   - iOS bugs: docs/architecture/IOS_APP_SPECIFICATION.md
+   - Data bugs: docs/architecture/DATA_ARCHITECTURE.md
 
 3. **Analyze Bug Behavior:**
 
@@ -913,7 +913,7 @@ Tag: bug-fix-${timestamp}
 
 **File Structure:**
 ```
-.workflow-logs/bugs/{timestamp}-{bug-slug}/
+.workflow-logs/active/bugs/{timestamp}-{bug-slug}/
 ├── bug-context.json          # User input
 ├── map-result.json           # Stage 1 output
 ├── explore-result.json       # Stage 2 output

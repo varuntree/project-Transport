@@ -1,0 +1,553 @@
+# Delegate to Codex CLI (Executive Mode)
+
+Delegate tasks to Codex CLI (`codex exec`) for autonomous, non-interactive execution. Packages context, invokes Codex with full automation, captures results.
+
+## Usage
+
+```
+/codex "run review command for recent changes"
+/codex "implement fix from bug diagnosis report"
+/codex "update BACKEND_SPECIFICATION with new endpoints"
+/codex --yolo "run full test suite and fix failures"
+```
+
+## Variables
+
+task: $1 (required: task description for Codex to execute)
+flags: $2+ (optional: --yolo, --json, --sandbox, etc.)
+
+## Instructions
+
+**IMPORTANT: Think hard. Package complete context for autonomous execution.**
+
+---
+
+## Stage 1: Parse Task & Gather Context
+
+### 1.1 Initialize Session
+
+```bash
+timestamp=$(date +%s)
+task_slug=$(echo "$1" | tr '[:upper:]' '[:lower:]' | tr -s ' ' '-' | tr -cd '[:alnum:]-' | cut -c1-50)
+codex_session_id="${timestamp}-${task_slug}"
+codex_dir=".workflow-logs/active/codex/${codex_session_id}"
+mkdir -p "${codex_dir}"
+
+echo "🤖 Codex CLI Delegation Session: ${codex_session_id}"
+echo "📋 Task: $1"
+echo ""
+
+# Parse flags
+use_yolo=false
+use_json=false
+sandbox_mode="workspace-write"
+
+for arg in "$@"; do
+  case "$arg" in
+    --yolo|--dangerously-bypass-approvals-and-sandbox)
+      use_yolo=true
+      ;;
+    --json)
+      use_json=true
+      ;;
+    --sandbox)
+      shift
+      sandbox_mode="$1"
+      ;;
+  esac
+done
+```
+
+### 1.2 Auto-Detect Relevant Context
+
+**Analyze task keywords to determine what context to include:**
+
+```bash
+# Extract keywords from task
+task_lower=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+
+# Determine context needs
+include_review_cmd=false
+include_implement_cmd=false
+include_test_cmd=false
+include_bug_cmd=false
+include_plan_cmd=false
+
+if [[ "$task_lower" =~ review ]]; then
+  include_review_cmd=true
+fi
+
+if [[ "$task_lower" =~ implement|implementation ]]; then
+  include_implement_cmd=true
+fi
+
+if [[ "$task_lower" =~ test|testing ]]; then
+  include_test_cmd=true
+fi
+
+if [[ "$task_lower" =~ bug|fix|diagnosis ]]; then
+  include_bug_cmd=true
+fi
+
+if [[ "$task_lower" =~ plan|planning ]]; then
+  include_plan_cmd=true
+fi
+```
+
+### 1.3 Gather Files
+
+**Collect relevant context based on task analysis:**
+
+```bash
+# Always include
+context_files=(
+  "CLAUDE.md"
+  "STRUCTURE.md"
+  "docs/standards/DEVELOPMENT_STANDARDS.md"
+  "docs/architecture/SYSTEM_OVERVIEW.md"
+)
+
+# Add architecture specs based on keywords
+if [[ "$task_lower" =~ backend|api|celery|task ]]; then
+  context_files+=("docs/architecture/BACKEND_SPECIFICATION.md")
+fi
+
+if [[ "$task_lower" =~ ios|swift|swiftui|app ]]; then
+  context_files+=("docs/architecture/IOS_APP_SPECIFICATION.md")
+fi
+
+if [[ "$task_lower" =~ gtfs|data|database|pattern ]]; then
+  context_files+=("docs/architecture/DATA_ARCHITECTURE.md")
+fi
+
+if [[ "$task_lower" =~ api.*contract|auth|apns|push ]]; then
+  context_files+=("docs/architecture/INTEGRATION_CONTRACTS.md")
+fi
+
+# Add slash command docs if task mentions them
+if [ "$include_review_cmd" = true ]; then
+  context_files+=(".claude/commands/review.md")
+fi
+
+if [ "$include_implement_cmd" = true ]; then
+  context_files+=(".claude/commands/implement.md")
+  context_files+=(".claude/commands/implement-phase.md")
+fi
+
+if [ "$include_test_cmd" = true ]; then
+  context_files+=(".claude/commands/test.md")
+fi
+
+if [ "$include_bug_cmd" = true ]; then
+  context_files+=(".claude/commands/bug.md")
+  context_files+=(".claude/commands/fix-bug.md")
+fi
+
+if [ "$include_plan_cmd" = true ]; then
+  context_files+=(".claude/commands/plan.md")
+  context_files+=(".claude/commands/plan-phase.md")
+fi
+
+# Add recent changes
+git_status=$(git status --short)
+recent_commits=$(git log --oneline -5)
+
+# Add task-specific files (if mentioned)
+# Example: "fix bug in backend/app/api/v1/stops.py"
+if [[ "$task_lower" =~ (backend|ios|specs)/[a-zA-Z0-9/_.-]+ ]]; then
+  # Extract file path from task description
+  mentioned_files=$(echo "$task_lower" | grep -oE '(backend|SydneyTransit|specs)/[a-zA-Z0-9/_.-]+')
+  for file in $mentioned_files; do
+    if [ -f "$file" ]; then
+      context_files+=("$file")
+    fi
+  done
+fi
+```
+
+---
+
+## Stage 2: Build Codex Prompt
+
+### 2.1 Generate Prompt
+
+```bash
+prompt_file="${codex_dir}/prompt.md"
+
+cat > "${prompt_file}" << 'PROMPT_EOF'
+# Task: {task description}
+
+## Project Context
+
+**Project:** Sydney Transit App (iOS + FastAPI Backend)
+
+**Tech Stack:**
+- Backend: FastAPI + Celery (3 queues: critical/normal/batch), Supabase PostgreSQL, Redis (GTFS-RT cache)
+- iOS: Swift/SwiftUI (iOS 16+), GRDB (15-20MB bundled GTFS), Supabase Auth
+- Data: NSW Transport GTFS (227MB static, GTFS-RT 30s polling)
+
+**Key Constraints:**
+- Solo dev, budget $25/mo MVP (0-1K users), maximize free tiers
+- App size <50MB download, offline-first
+- NSW API: 5 req/s limit, 60K calls/day
+- Stack fixed (no new services beyond planned)
+
+**Current Status:**
+- Branch: {current_branch}
+- Recent commits:
+{recent_commits}
+
+- Changed files:
+{git_status}
+
+---
+
+## Available Slash Commands
+
+You have access to these orchestrator commands (invoke via shell):
+
+**Planning:**
+- `/plan-phase {N}` - Create phase implementation plan
+- `/plan "{task}"` - Create custom task plan
+
+**Execution:**
+- `/implement-phase {N}` - Execute phase via checkpoints
+- `/implement {plan-name}` - Execute custom plan
+
+**Quality:**
+- `/review [scope]` - Multi-panel review (5 specialized agents)
+- `/test {backend|validation|all}` - Run test suites
+
+**Bug Handling:**
+- `/bug "{description}"` - 4-stage diagnosis + fix
+- `/fix-bug {phase} {checkpoint} {type}` - Fix validation failures
+
+**Orchestration:**
+- `/workflow "{task}"` - Auto-route to appropriate workflow
+
+{if any slash commands included in context}
+## Slash Command Documentation
+
+{include full .claude/commands/*.md files for commands mentioned in task}
+
+{end if}
+
+---
+
+## Repository Structure
+
+{tree output - condensed to 2 levels}
+
+---
+
+## Relevant Files
+
+{include content of context_files array}
+
+---
+
+## Standards & Patterns
+
+**From docs/standards/DEVELOPMENT_STANDARDS.md:**
+
+{include key sections: Logging (structlog JSON), Error Handling, API Envelope, Celery patterns, iOS patterns}
+
+---
+
+## Your Task
+
+{user's task description - verbatim}
+
+**Execution Guidelines:**
+
+1. You are running in **Codex CLI executive mode** (non-interactive, autonomous)
+2. You can:
+   - Use any slash commands (invoke via shell: `bash -c "/plan ..."`  or use SlashCommand tool if available)
+   - Read/write files as needed
+   - Run git commands (status, diff, log - but **NEVER commit/push**)
+   - Execute tests, validations
+   - Make decisions without asking (you're autonomous)
+
+3. You MUST follow:
+   - docs/standards/DEVELOPMENT_STANDARDS.md patterns (logging, error handling, naming)
+   - Architecture specs (read relevant specs from context above)
+   - Project constraints (budget, offline-first, solo dev)
+
+4. You MUST NOT:
+   - Commit to git (orchestrator handles)
+   - Push to remote
+   - Install new services/dependencies (stack is fixed)
+   - Skip validation/testing
+
+**Expected Output:**
+
+Return structured report in your final message:
+
+```markdown
+# Codex Execution Report: {task}
+
+## Summary
+{1-2 sentence summary of what you did}
+
+## Actions Taken
+1. {Action 1 - be specific}
+2. {Action 2}
+3. ...
+
+## Commands Executed
+```bash
+{list all bash/shell commands you ran}
+```
+
+## Files Modified
+- Created: {list}
+- Modified: {list}
+- Deleted: {list}
+
+## Validation
+{Did you run tests? What was the result?}
+{Did you run validation commands? Pass/fail?}
+
+## Findings
+{Any issues discovered, recommendations, next steps}
+
+## Ready for Review
+{Yes/No - explain why}
+```
+
+**Confidence Check:**
+- Am I 80%+ confident in this approach?
+- For iOS work: Do I have Apple docs references? (Don't hallucinate iOS APIs)
+- For external services: Did I check documentation?
+- If confidence <80%: Research first using available tools
+
+---
+
+**Context Summary:**
+- Architecture specs: {count} files
+- Slash commands: {count} files
+- Code files: {count} files
+- Total context: ~{token_estimate}K tokens
+
+**Execution Mode:** {full-auto|yolo|read-only}
+
+PROMPT_EOF
+
+# Replace placeholders in prompt
+sed -i '' "s|{task description}|$1|g" "${prompt_file}"
+sed -i '' "s|{current_branch}|$(git rev-parse --abbrev-ref HEAD)|g" "${prompt_file}"
+sed -i '' "s|{recent_commits}|${recent_commits}|g" "${prompt_file}"
+sed -i '' "s|{git_status}|${git_status}|g" "${prompt_file}"
+# ... (additional sed replacements for context files, tree, etc.)
+```
+
+---
+
+## Stage 3: Invoke Codex Executive Mode
+
+### 3.1 Construct Command
+
+```bash
+# Determine flags
+if [ "$use_yolo" = true ]; then
+  exec_flags="--yolo"
+  exec_mode="yolo"
+else
+  exec_flags="--full-auto"
+  exec_mode="full-auto"
+fi
+
+if [ "$use_json" = true ]; then
+  exec_flags="${exec_flags} --json"
+fi
+
+if [ "$sandbox_mode" != "workspace-write" ]; then
+  exec_flags="${exec_flags} --sandbox ${sandbox_mode}"
+fi
+
+output_file="${codex_dir}/codex-output.md"
+
+echo "🚀 Invoking Codex CLI..."
+echo "   Mode: ${exec_mode}"
+echo "   Flags: ${exec_flags}"
+echo "   Prompt: ${prompt_file}"
+echo "   Output: ${output_file}"
+echo ""
+```
+
+### 3.2 Execute Codex
+
+```bash
+# Invoke Codex CLI
+codex exec \
+  ${exec_flags} \
+  --cd /Users/varunprasad/code/prjs/prj_transport \
+  --output-last-message "${output_file}" \
+  "$(cat ${prompt_file})"
+
+codex_exit_code=$?
+
+# Capture session ID if available
+# (Codex may print session ID to stderr/stdout)
+```
+
+---
+
+## Stage 4: Capture & Report Results
+
+### 4.1 Save Metadata
+
+```bash
+echo "{
+  \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",
+  \"task\": \"$1\",
+  \"session_id\": \"${codex_session_id}\",
+  \"execution_mode\": \"${exec_mode}\",
+  \"flags_used\": \"${exec_flags}\",
+  \"exit_code\": ${codex_exit_code},
+  \"output_file\": \"${output_file}\",
+  \"prompt_file\": \"${prompt_file}\"
+}" > "${codex_dir}/metadata.json"
+```
+
+### 4.2 Update Workflow Logs Index
+
+```bash
+# Add to .workflow-logs/INDEX.json
+jq --arg id "${codex_session_id}" \
+   --arg task "$1" \
+   --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+   --arg status "$( [ ${codex_exit_code} -eq 0 ] && echo 'success' || echo 'failed' )" \
+   --arg location "active/codex/${codex_session_id}" \
+   '.sessions.codex += [{
+     "id": $id,
+     "task": $task,
+     "timestamp": $timestamp,
+     "status": $status,
+     "location": $location
+   }] | .stats.total_codex_sessions += 1' \
+   .workflow-logs/INDEX.json > .workflow-logs/INDEX.json.tmp && \
+   mv .workflow-logs/INDEX.json.tmp .workflow-logs/INDEX.json
+```
+
+### 4.3 Display Results
+
+```bash
+echo ""
+echo "─────────────────────────────────────────────────"
+echo "Codex Execution Complete"
+echo "─────────────────────────────────────────────────"
+echo ""
+
+# Show Codex's final message
+cat "${output_file}"
+
+echo ""
+echo "─────────────────────────────────────────────────"
+echo "Session: ${codex_session_id}"
+echo "Exit Code: ${codex_exit_code}"
+echo ""
+echo "📁 Session Files:"
+echo "   Prompt: ${prompt_file}"
+echo "   Output: ${output_file}"
+echo "   Metadata: ${codex_dir}/metadata.json"
+echo ""
+
+if [ ${codex_exit_code} -eq 0 ]; then
+  echo "✅ Codex completed successfully"
+else
+  echo "❌ Codex failed (exit code: ${codex_exit_code})"
+  echo "   Review output above for details"
+fi
+
+echo ""
+echo "Next Steps:"
+echo "1. Review Codex's report above"
+echo "2. Verify changes: git diff"
+echo "3. Run validation: /test all"
+echo "4. If needed: /review to assess quality"
+echo ""
+```
+
+---
+
+## Resume Support
+
+**To resume a Codex session:**
+
+```bash
+# Resume last session
+codex exec resume --last
+
+# Resume specific session
+codex exec resume {codex-session-id}
+```
+
+**Note:** Resume capability depends on Codex CLI session persistence.
+
+---
+
+## Notes
+
+**Safety Tiers:**
+
+```bash
+# Tier 1: Safe (default)
+/codex "task"
+→ Uses --full-auto (workspace-write sandbox, approvals on failure)
+
+# Tier 2: Dangerous (explicit)
+/codex --yolo "task"
+→ Uses --yolo (no approvals, full access)
+
+# Tier 3: Read-only (analysis)
+/codex --sandbox read-only "task"
+→ For review/analysis only
+```
+
+**Context Packaging:**
+- Auto-detects relevant specs from task keywords
+- Includes slash command docs if task mentions commands
+- Targets <50K tokens (Codex context window)
+- Prioritizes task-relevant files
+
+**Integration with Slash Commands:**
+
+Codex can invoke other slash commands:
+```
+/codex "run review and fix all P0 issues"
+→ Codex executes: /review
+→ Codex parses: review report
+→ Codex implements: P0 fixes
+→ Codex re-runs: /review to verify
+→ Returns: Complete report
+```
+
+**Use Cases:**
+- Autonomous workflows: `/codex "implement phase 2"`
+- Fix + validate loops: `/codex "fix bug X and test"`
+- Documentation updates: `/codex "update specs with new endpoints"`
+- Full pipelines: `/codex --yolo "plan, implement, test feature X"`
+
+**Risks & Mitigations:**
+- **Risk:** Codex runs destructive commands
+  - **Mitigation:** Default `--full-auto`, explicit `--yolo` required
+  - **Mitigation:** Prompt forbids `git push`, `rm -rf`
+- **Risk:** Context too large (>50K tokens)
+  - **Mitigation:** Smart filtering based on task keywords
+  - **Mitigation:** Compress large files if needed
+- **Risk:** Codex hallucinates slash commands
+  - **Mitigation:** Include actual command docs in context
+  - **Mitigation:** Prompt lists ONLY available commands
+
+**Success Criteria:**
+- Context packaged <50K tokens
+- Codex executes autonomously (no human intervention)
+- Results captured to `.workflow-logs/active/codex/`
+- Exit code indicates success/failure
+- INDEX.json updated
+- Safe by default (`--full-auto`), explicit opt-in for `--yolo`
+
+---
+
+**For full project structure, see `/STRUCTURE.md`**

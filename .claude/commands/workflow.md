@@ -101,8 +101,11 @@ Input: "do phase 3"
 **Save reconstructed task:**
 ```bash
 reconstructed_task="<reconstructed description>"
-echo "User input: $1" > /tmp/workflow-analysis.txt
-echo "Reconstructed: $reconstructed_task" >> /tmp/workflow-analysis.txt
+timestamp=$(date +%s)
+workflow_log_dir=".workflow-logs/active/workflows/${timestamp}"
+mkdir -p "${workflow_log_dir}"
+echo "User input: $1" > "${workflow_log_dir}/analysis.txt"
+echo "Reconstructed: $reconstructed_task" >> "${workflow_log_dir}/analysis.txt"
 ```
 
 ---
@@ -231,8 +234,8 @@ Complexity level:
 # Check for existing custom plan with similar name
 plan_slug=$(echo "$reconstructed_task" | tr '[:upper:]' '[:lower:]' | tr -s ' ' '-' | tr -cd '[:alnum:]-' | cut -c1-60)
 
-if [ -f "specs/${plan_slug}-plan.md" ]; then
-  existing_plan="specs/${plan_slug}-plan.md"
+if [ -f "plans/${plan_slug}-plan.md" ]; then
+  existing_plan="plans/${plan_slug}-plan.md"
   plan_status="exists"
 else
   existing_plan=""
@@ -242,7 +245,7 @@ fi
 # Check for phase work
 if [[ "$reconstructed_task" =~ [Pp]hase[[:space:]]+([0-9]+) ]]; then
   phase_number="${BASH_REMATCH[1]}"
-  if [ -f "oracle/phases/PHASE_${phase_number}_*.md" ]; then
+  if [ -f "docs/phases/PHASE_${phase_number}_*.md" ]; then
     phase_spec="exists"
   else
     phase_spec="missing"
@@ -565,7 +568,7 @@ ELSE:
 ---
 
 **Total Duration:** {duration}
-**Workflow Log:** /tmp/workflow-analysis.txt
+**Workflow Log:** .workflow-logs/active/workflows/{timestamp}/analysis.txt
 ```
 
 ---
@@ -611,7 +614,7 @@ Workflow analysis:
 Autonomous execution:
 → /plan "Implement Redis caching layer for GTFS route pattern queries"
   → Exploration + planning
-  → Plan: specs/redis-caching-route-patterns-plan.md
+  → Plan: plans/redis-caching-route-patterns-plan.md
 
 → /implement redis-caching-route-patterns
   → 3 checkpoints executed
@@ -632,7 +635,7 @@ User: "implement phase 2"
 Workflow analysis:
 - Reconstructed: "Implement Phase 2 from implementation roadmap"
 - Type: PHASE_WORK (confidence: 1.0)
-- Phase: 2 (oracle/phases/PHASE_2_*.md exists)
+- Phase: 2 (docs/phases/PHASE_2_*.md exists)
 - Complexity: complex (8/10)
 - Workflow: phase
 - Ambiguity: No
@@ -641,7 +644,7 @@ Autonomous execution:
 → /plan-phase 2
   → Reads oracle spec
   → Exploration + iOS research
-  → Plan: specs/phase-2-implementation-plan.md
+  → Plan: plans/phase-2-implementation-plan.md
 
 → /implement-phase 2
   → 5 checkpoints executed

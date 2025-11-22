@@ -33,11 +33,11 @@ scope: $1 (required: backend|validation|all)
 2. **Find most recent plan:**
    ```bash
    # Check for active custom plan
-   most_recent_custom=$(ls -t .workflow-logs/custom/*/completion-report.json 2>/dev/null | head -1)
+   most_recent_custom=$(ls -t .workflow-logs/active/custom/*/completion-report.json 2>/dev/null | head -1)
    plan_name_custom=$(echo $most_recent_custom | cut -d'/' -f3)
 
    # Check for active phase plan
-   most_recent_phase=$(ls -t .workflow-logs/phases/phase-*/phase-completion.json 2>/dev/null | head -1)
+   most_recent_phase=$(ls -t .workflow-logs/active/phases/phase-*/phase-completion.json 2>/dev/null | head -1)
    phase_number=$(echo $most_recent_phase | grep -oP 'phase-\K\d+')
 
    # Determine which is more recent
@@ -59,7 +59,7 @@ scope: $1 (required: backend|validation|all)
 3. **Create test context:**
    ```bash
    timestamp=$(date +%s)
-   test_log_dir=".workflow-logs/tests/${timestamp}"
+   test_log_dir=".workflow-logs/active/tests/${timestamp}"
    mkdir -p "${test_log_dir}"
 
    echo "{
@@ -220,7 +220,7 @@ scope: $1 (required: backend|validation|all)
 
 **Create comprehensive test report:**
 
-`.workflow-logs/tests/{timestamp}/REPORT.md`:
+`.workflow-logs/active/tests/{timestamp}/REPORT.md`:
 
 ```markdown
 # Test Report
@@ -352,10 +352,10 @@ curl http://localhost:8000/api/v1/departures?stop_id=200060
 
 ---
 
-**Report Location:** `.workflow-logs/tests/{timestamp}/REPORT.md`
-**Test Context:** `.workflow-logs/tests/{timestamp}/test-context.json`
-**Backend Results:** `.workflow-logs/tests/{timestamp}/backend-results.json`
-**Validation Results:** `.workflow-logs/tests/{timestamp}/validation-results.json`
+**Report Location:** `.workflow-logs/active/tests/{timestamp}/REPORT.md`
+**Test Context:** `.workflow-logs/active/tests/{timestamp}/test-context.json`
+**Backend Results:** `.workflow-logs/active/tests/{timestamp}/backend-results.json`
+**Validation Results:** `.workflow-logs/active/tests/{timestamp}/validation-results.json`
 ```
 
 ---
@@ -394,11 +394,11 @@ Overall Status: {✅ PASSED | ❌ FAILED}
 ❌ {total_failed} test(s) failed
 
 Next Steps:
-1. Review failures in: .workflow-logs/tests/{timestamp}/REPORT.md
+1. Review failures in: .workflow-logs/active/tests/{timestamp}/REPORT.md
 2. Fix failing tests/validations
 3. Re-run: /test {scope}
 
-Full Report: .workflow-logs/tests/{timestamp}/REPORT.md
+Full Report: .workflow-logs/active/tests/{timestamp}/REPORT.md
 ```
 
 ---
@@ -427,7 +427,7 @@ Full Report: .workflow-logs/tests/{timestamp}/REPORT.md
 - Before creating pull request
 
 **Test Artifacts:**
-- All results saved to `.workflow-logs/tests/{timestamp}/`
+- All results saved to `.workflow-logs/active/tests/{timestamp}/`
 - JSON format for programmatic access
 - Markdown report for human review
 - Raw output files for debugging

@@ -49,7 +49,7 @@ scope: $1 (optional: auto-detects recent changes if omitted)
 # Create review session
 timestamp=$(date +%s)
 review_id="review-${timestamp}"
-review_dir=".workflow-logs/reviews/${review_id}"
+review_dir=".workflow-logs/active/reviews/${review_id}"
 mkdir -p "${review_dir}"
 
 # Determine scope
@@ -68,7 +68,7 @@ elif [[ "$1" =~ ^phase-([0-9]+)$ ]]; then
   scope_type="phase"
   phase_number="${BASH_REMATCH[1]}"
   scope_ref="phase-${phase_number}"
-elif [ -f "specs/${1}-plan.md" ]; then
+elif [ -f "plans/${1}-plan.md" ]; then
   # Custom plan
   scope_type="custom"
   plan_name="$1"
@@ -85,9 +85,9 @@ fi
 **For checkpoint scope:**
 ```bash
 # Load checkpoint artifacts
-exploration_report=".workflow-logs/phases/phase-${phase_number}/exploration-report.json"
-checkpoint_design=".workflow-logs/phases/phase-${phase_number}/checkpoint-${checkpoint_number}-design.md"
-checkpoint_result=".workflow-logs/phases/phase-${phase_number}/checkpoint-${checkpoint_number}-result.json"
+exploration_report=".workflow-logs/active/phases/phase-${phase_number}/exploration-report.json"
+checkpoint_design=".workflow-logs/active/phases/phase-${phase_number}/checkpoint-${checkpoint_number}-design.md"
+checkpoint_result=".workflow-logs/active/phases/phase-${phase_number}/checkpoint-${checkpoint_number}-result.json"
 
 # Get changed files from checkpoint result
 changed_files=$(cat "${checkpoint_result}" | jq -r '.files_created[],.files_modified[]')
@@ -99,9 +99,9 @@ git diff phase-${phase_number}-checkpoint-$((checkpoint_number-1))..phase-${phas
 **For phase scope:**
 ```bash
 # Load phase artifacts
-exploration_report=".workflow-logs/phases/phase-${phase_number}/exploration-report.json"
+exploration_report=".workflow-logs/active/phases/phase-${phase_number}/exploration-report.json"
 phase_plan="specs/phase-${phase_number}-implementation-plan.md"
-phase_completion=".workflow-logs/phases/phase-${phase_number}/phase-completion.json"
+phase_completion=".workflow-logs/active/phases/phase-${phase_number}/phase-completion.json"
 
 # Get all changed files in phase
 git diff main..phase-${phase_number}-implementation --name-only
@@ -110,9 +110,9 @@ git diff main..phase-${phase_number}-implementation --name-only
 **For custom plan scope:**
 ```bash
 # Load custom plan artifacts
-exploration_report=".workflow-logs/custom/${plan_name}/exploration-report.json"
-plan_file="specs/${plan_name}-plan.md"
-completion_report=".workflow-logs/custom/${plan_name}/completion-report.json"
+exploration_report=".workflow-logs/active/custom/${plan_name}/exploration-report.json"
+plan_file="plans/${plan_name}-plan.md"
+completion_report=".workflow-logs/active/custom/${plan_name}/completion-report.json"
 
 # Get changed files
 git diff main..${plan_name}-implementation --name-only
@@ -171,8 +171,8 @@ Evaluate if this implementation serves the long-term product vision and goals.
 ACTIONS:
 
 1. **Read Product Specifications:**
-   - oracle/specs/SYSTEM_OVERVIEW.md (product positioning, features, user needs)
-   - Relevant phase spec (if phase work): oracle/phases/PHASE_${phase_number}_*.md
+   - docs/architecture/SYSTEM_OVERVIEW.md (product positioning, features, user needs)
+   - Relevant phase spec (if phase work): docs/phases/PHASE_${phase_number}_*.md
    - Implementation plan: ${plan_file}
 
 2. **Read Implementation:**
@@ -260,11 +260,11 @@ Verify implementation follows technical standards, patterns, and architecture sp
 ACTIONS:
 
 1. **Read Standards & Architecture:**
-   - oracle/DEVELOPMENT_STANDARDS.md (patterns, logging, error handling)
-   - oracle/specs/BACKEND_SPECIFICATION.md (if backend changes)
-   - oracle/specs/IOS_APP_SPECIFICATION.md (if iOS changes)
-   - oracle/specs/INTEGRATION_CONTRACTS.md (if API changes)
-   - oracle/specs/DATA_ARCHITECTURE.md (if data model changes)
+   - docs/standards/DEVELOPMENT_STANDARDS.md (patterns, logging, error handling)
+   - docs/architecture/BACKEND_SPECIFICATION.md (if backend changes)
+   - docs/architecture/IOS_APP_SPECIFICATION.md (if iOS changes)
+   - docs/architecture/INTEGRATION_CONTRACTS.md (if API changes)
+   - docs/architecture/DATA_ARCHITECTURE.md (if data model changes)
 
 2. **Read Implementation:**
    - Review all changed files line by line
@@ -367,8 +367,8 @@ ACTIONS:
    - Map data flow (where can things go wrong?)
 
 2. **Read Constraints:**
-   - oracle/specs/SYSTEM_OVERVIEW.md (constraints section)
-   - oracle/specs/DATA_ARCHITECTURE.md (data assumptions)
+   - docs/architecture/SYSTEM_OVERVIEW.md (constraints section)
+   - docs/architecture/DATA_ARCHITECTURE.md (data assumptions)
    - NSW API limits (5 req/s, 60K calls/day)
    - Budget constraints ($25/mo)
 
@@ -589,16 +589,16 @@ ACTIONS:
 2. **Read Documentation:**
 
    **Architecture Specs:**
-   - oracle/specs/SYSTEM_OVERVIEW.md (product overview, features)
-   - oracle/specs/BACKEND_SPECIFICATION.md (API endpoints, Celery tasks)
-   - oracle/specs/IOS_APP_SPECIFICATION.md (iOS architecture, patterns)
-   - oracle/specs/DATA_ARCHITECTURE.md (GTFS pipeline, DB schema)
-   - oracle/specs/INTEGRATION_CONTRACTS.md (API contracts, auth flow)
+   - docs/architecture/SYSTEM_OVERVIEW.md (product overview, features)
+   - docs/architecture/BACKEND_SPECIFICATION.md (API endpoints, Celery tasks)
+   - docs/architecture/IOS_APP_SPECIFICATION.md (iOS architecture, patterns)
+   - docs/architecture/DATA_ARCHITECTURE.md (GTFS pipeline, DB schema)
+   - docs/architecture/INTEGRATION_CONTRACTS.md (API contracts, auth flow)
 
    **Project Docs:**
    - CLAUDE.md (project status, tech stack, current phase)
-   - oracle/IMPLEMENTATION_ROADMAP.md (phase completion status)
-   - oracle/DEVELOPMENT_STANDARDS.md (coding patterns)
+   - docs/IMPLEMENTATION_ROADMAP.md (phase completion status)
+   - docs/standards/DEVELOPMENT_STANDARDS.md (coding patterns)
 
    **Plans:**
    - ${plan_file} (implementation plan for this work)
@@ -646,15 +646,15 @@ Save to: ${review_dir}/panel-5-documentation-sync.json
       \"category\": \"missing_documentation|outdated_documentation|deviation_not_logged|unclear_contract\",
       \"title\": \"Brief title\",
       \"description\": \"What's out of sync?\",
-      \"affected_files\": [\"oracle/specs/BACKEND_SPECIFICATION.md:Section 3\"],
+      \"affected_files\": [\"docs/architecture/BACKEND_SPECIFICATION.md:Section 3\"],
       \"current_state\": \"What does doc say now?\",
       \"actual_implementation\": \"What does code actually do?\",
-      \"recommendation\": \"Update oracle/specs/BACKEND_SPECIFICATION.md:Section 3 to add...\"
+      \"recommendation\": \"Update docs/architecture/BACKEND_SPECIFICATION.md:Section 3 to add...\"
     }
   ],
   \"update_checklist\": [
     {
-      \"file\": \"oracle/specs/BACKEND_SPECIFICATION.md\",
+      \"file\": \"docs/architecture/BACKEND_SPECIFICATION.md\",
       \"section\": \"Section 3: API Endpoints\",
       \"action\": \"Add new /api/v1/stops/{id}/departures endpoint documentation\"
     }
@@ -786,7 +786,7 @@ Example:
 1. {Refactor/optimization}
    - Why: {reasoning}
    - Defer to: Phase {N+1} or technical debt backlog
-   - Log to: .workflow-logs/technical-debt.md
+   - Log to: .workflow-logs/meta/technical-debt.md
 ```
 
 ---
@@ -811,7 +811,7 @@ Health Verdict:
 
 ### 4.2 Write Human-Readable Report
 
-`.workflow-logs/reviews/{review_id}/REPORT.md`:
+`.workflow-logs/active/reviews/{review_id}/REPORT.md`:
 
 ```markdown
 # Review Report: {scope_ref}
@@ -949,13 +949,13 @@ Health Verdict:
 {From Panel 5}
 
 ### Immediate Updates (P0/P1):
-- [ ] Update `oracle/specs/BACKEND_SPECIFICATION.md:Section 3` - Add new /api/v1/departures endpoint
+- [ ] Update `docs/architecture/BACKEND_SPECIFICATION.md:Section 3` - Add new /api/v1/departures endpoint
 - [ ] Update `CLAUDE.md` - Change status to "Phase 2 complete"
-- [ ] Update `oracle/specs/INTEGRATION_CONTRACTS.md:Section 2` - Document new API response format
+- [ ] Update `docs/architecture/INTEGRATION_CONTRACTS.md:Section 2` - Document new API response format
 
 ### Future Updates (P2/P3):
 - [ ] Add inline comments to complex GTFS parsing logic in `backend/app/services/gtfs_service.py`
-- [ ] Update `oracle/IMPLEMENTATION_ROADMAP.md` - Mark Phase 2 complete
+- [ ] Update `docs/IMPLEMENTATION_ROADMAP.md` - Mark Phase 2 complete
 
 ---
 
@@ -1017,7 +1017,7 @@ Health Verdict:
 **Low Priority:**
 1. {Issue title} - Technical debt backlog
 
-**Backlog logged to:** `.workflow-logs/technical-debt.md`
+**Backlog logged to:** `.workflow-logs/meta/technical-debt.md`
 
 ---
 
@@ -1102,11 +1102,11 @@ Health Verdict:
 - Completion Report: {completion_report}
 
 **Panel Reports:**
-- Panel 1: `.workflow-logs/reviews/{review_id}/panel-1-product-alignment.json`
-- Panel 2: `.workflow-logs/reviews/{review_id}/panel-2-technical-implementation.json`
-- Panel 3: `.workflow-logs/reviews/{review_id}/panel-3-edge-cases-robustness.json`
-- Panel 4: `.workflow-logs/reviews/{review_id}/panel-4-regression-risk.json`
-- Panel 5: `.workflow-logs/reviews/{review_id}/panel-5-documentation-sync.json`
+- Panel 1: `.workflow-logs/active/reviews/{review_id}/panel-1-product-alignment.json`
+- Panel 2: `.workflow-logs/active/reviews/{review_id}/panel-2-technical-implementation.json`
+- Panel 3: `.workflow-logs/active/reviews/{review_id}/panel-3-edge-cases-robustness.json`
+- Panel 4: `.workflow-logs/active/reviews/{review_id}/panel-4-regression-risk.json`
+- Panel 5: `.workflow-logs/active/reviews/{review_id}/panel-5-documentation-sync.json`
 
 ---
 
@@ -1116,7 +1116,7 @@ Health Verdict:
 
 ### 4.3 Write Machine-Readable Summary
 
-`.workflow-logs/reviews/{review_id}/review-summary.json`:
+`.workflow-logs/active/reviews/{review_id}/review-summary.json`:
 
 ```json
 {
@@ -1157,7 +1157,7 @@ Health Verdict:
   },
   "documentation_updates": [
     {
-      "file": "oracle/specs/BACKEND_SPECIFICATION.md",
+      "file": "docs/architecture/BACKEND_SPECIFICATION.md",
       "section": "Section 3",
       "action": "Add endpoint documentation",
       "priority": "P1"
@@ -1227,7 +1227,7 @@ Multiple critical issues found:
 This implementation needs significant work before merge.
 
 Action Required:
-1. Review detailed report: .workflow-logs/reviews/{review_id}/REPORT.md
+1. Review detailed report: .workflow-logs/active/reviews/{review_id}/REPORT.md
 2. Address all P0 issues
 3. Consider addressing P1 issues (or defer with justification)
 4. Re-run: /review
@@ -1235,15 +1235,15 @@ Action Required:
 
 ---
 
-Full Report: .workflow-logs/reviews/{review_id}/REPORT.md
-Review Summary: .workflow-logs/reviews/{review_id}/review-summary.json
+Full Report: .workflow-logs/active/reviews/{review_id}/REPORT.md
+Review Summary: .workflow-logs/active/reviews/{review_id}/review-summary.json
 
 Panel Reports:
-- Product Alignment: .workflow-logs/reviews/{review_id}/panel-1-product-alignment.json
-- Technical Implementation: .workflow-logs/reviews/{review_id}/panel-2-technical-implementation.json
-- Edge Cases & Robustness: .workflow-logs/reviews/{review_id}/panel-3-edge-cases-robustness.json
-- Regression Risk: .workflow-logs/reviews/{review_id}/panel-4-regression-risk.json
-- Documentation Sync: .workflow-logs/reviews/{review_id}/panel-5-documentation-sync.json
+- Product Alignment: .workflow-logs/active/reviews/{review_id}/panel-1-product-alignment.json
+- Technical Implementation: .workflow-logs/active/reviews/{review_id}/panel-2-technical-implementation.json
+- Edge Cases & Robustness: .workflow-logs/active/reviews/{review_id}/panel-3-edge-cases-robustness.json
+- Regression Risk: .workflow-logs/active/reviews/{review_id}/panel-4-regression-risk.json
+- Documentation Sync: .workflow-logs/active/reviews/{review_id}/panel-5-documentation-sync.json
 ```
 
 ---

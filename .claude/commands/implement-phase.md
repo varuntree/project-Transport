@@ -35,7 +35,7 @@ phase_number: $1
 
 1. **Exploration report:**
    ```bash
-   cat .workflow-logs/phases/phase-{phase_number}/exploration-report.json
+   cat .workflow-logs/active/phases/phase-{phase_number}/exploration-report.json
    ```
    (~2K tokens - compressed reference)
 
@@ -48,7 +48,7 @@ phase_number: $1
 3. **iOS research (if exists):**
    ```bash
    # Check research summary
-   cat .workflow-logs/phases/phase-{phase_number}/ios-research-summary.json
+   cat .workflow-logs/active/phases/phase-{phase_number}/ios-research-summary.json
 
    # Load research files referenced in checkpoints (on-demand)
    # Do NOT load all at once - load per checkpoint as needed
@@ -58,7 +58,7 @@ phase_number: $1
 
 **Log state:**
 ```bash
-echo '{"stage":"context_loaded","exploration_tokens":2000,"plan_tokens":2000}' > .workflow-logs/phases/phase-{phase_number}/orchestrator-state.json
+echo '{"stage":"context_loaded","exploration_tokens":2000,"plan_tokens":2000}' > .workflow-logs/active/phases/phase-{phase_number}/orchestrator-state.json
 ```
 
 ---
@@ -73,7 +73,7 @@ echo '{"stage":"context_loaded","exploration_tokens":2000,"plan_tokens":2000}' >
    - If incomplete: STOP, report blocker
 
 2. **Previous phase complete:**
-   - Read `.workflow-logs/phases/phase-{phase_number-1}/phase-completion.json` (if phase > 0)
+   - Read `.workflow-logs/active/phases/phase-{phase_number-1}/phase-completion.json` (if phase > 0)
    - Verify deliverables exist
    - If missing: STOP, report blocker
 
@@ -96,7 +96,7 @@ For each checkpoint from implementation plan:
 
 ### Design Template
 
-Create `.workflow-logs/phases/phase-{phase_number}/checkpoint-{N}-design.md`:
+Create `.workflow-logs/active/phases/phase-{phase_number}/checkpoint-{N}-design.md`:
 
 ```markdown
 # Checkpoint {N}: <Name>
@@ -139,7 +139,7 @@ Create `.workflow-logs/phases/phase-{phase_number}/checkpoint-{N}-design.md`:
 
 ## References for Subagent
 - Exploration report: `critical_patterns` → <specific pattern>
-- iOS research: `.workflow-logs/phases/phase-{phase_number}/ios-research-<topic>.md`
+- iOS research: `.workflow-logs/active/phases/phase-{phase_number}/ios-research-<topic>.md`
 - Standards: DEVELOPMENT_STANDARDS.md:Section X
 - Architecture: <spec file>:Section Y
 - Previous checkpoint: <if depends on previous checkpoint result>
@@ -174,7 +174,7 @@ PHASE CONTEXT:
 - Your checkpoint: <Specific goal>
 
 CHECKPOINT DESIGN:
-<Paste full design from .workflow-logs/phases/phase-{phase_number}/checkpoint-{N}-design.md>
+<Paste full design from .workflow-logs/active/phases/phase-{phase_number}/checkpoint-{N}-design.md>
 
 PREVIOUS CHECKPOINT RESULT (if N > 1):
 <From previous subagent JSON return>
@@ -186,9 +186,9 @@ PREVIOUS CHECKPOINT RESULT (if N > 1):
 }
 
 REFERENCES (Read if needed):
-- Exploration patterns: .workflow-logs/phases/phase-{phase_number}/exploration-report.json → critical_patterns
-- iOS research: .workflow-logs/phases/phase-{phase_number}/ios-research-summary.json (see which files exist)
-  - Load specific research file: .workflow-logs/phases/phase-{phase_number}/ios-research-<topic>.md (only if checkpoint needs it)
+- Exploration patterns: .workflow-logs/active/phases/phase-{phase_number}/exploration-report.json → critical_patterns
+- iOS research: .workflow-logs/active/phases/phase-{phase_number}/ios-research-summary.json (see which files exist)
+  - Load specific research file: .workflow-logs/active/phases/phase-{phase_number}/ios-research-<topic>.md (only if checkpoint needs it)
 - Standards: DEVELOPMENT_STANDARDS.md (specific sections in design)
 - Architecture specs: <From design references>
 - Example code: <From exploration report example_location>
@@ -211,7 +211,7 @@ Before implementing any pattern/library/API:
 - NEVER hallucinate - if confidence <80%, READ the reference docs
 
 If uncertain:
-- iOS patterns → Check .workflow-logs/phases/phase-{phase_number}/ios-research-summary.json for relevant topic, then read that specific research file
+- iOS patterns → Check .workflow-logs/active/phases/phase-{phase_number}/ios-research-summary.json for relevant topic, then read that specific research file
 - Backend patterns → Read DEVELOPMENT_STANDARDS.md section
 - External service → Use WebFetch or search for official docs
 - Return "blocked" status if truly stuck (don't guess, NEVER hallucinate iOS APIs)
@@ -308,7 +308,7 @@ Task tool:
      "validation_output": "<output>",
      "expected_output": "<from design>",
      "timestamp": "<ISO 8601>"
-   }' > .workflow-logs/phases/phase-{phase_number}/checkpoint-{N}-validation-failure.json
+   }' > .workflow-logs/active/phases/phase-{phase_number}/checkpoint-{N}-validation-failure.json
    ```
 
 2. **Invoke /fix-bug:**
@@ -342,9 +342,9 @@ Task tool:
 git add .
 
 # Save subagent result
-echo '<subagent_json>' > .workflow-logs/phases/phase-{phase_number}/checkpoint-{N}-result.json
+echo '<subagent_json>' > .workflow-logs/active/phases/phase-{phase_number}/checkpoint-{N}-result.json
 
-git add .workflow-logs/phases/phase-{phase_number}/
+git add .workflow-logs/active/phases/phase-{phase_number}/
 
 git commit -m "feat(phase-{phase_number}): checkpoint {N} - <name>
 
@@ -371,7 +371,7 @@ echo '{
   "status": "<from subagent>",
   "files_created": <count>,
   "next_checkpoint_context": "<from subagent result>"
-}' >> .workflow-logs/phases/phase-{phase_number}/orchestrator-state.json
+}' >> .workflow-logs/active/phases/phase-{phase_number}/orchestrator-state.json
 ```
 
 ### 4.6 Repeat for Next Checkpoint
@@ -437,7 +437,7 @@ git tag phase-{phase_number}-complete
 
 **Orchestrator generates:**
 
-`.workflow-logs/phases/phase-{phase_number}/phase-completion.json`:
+`.workflow-logs/active/phases/phase-{phase_number}/phase-completion.json`:
 
 ```json
 {
@@ -567,7 +567,7 @@ git diff --stat main..phase-{phase_number}-implementation
 **Total Implementation Time:** <duration>
 ```
 
-Save to: `.workflow-logs/phases/phase-{phase_number}/REPORT.md`
+Save to: `.workflow-logs/active/phases/phase-{phase_number}/REPORT.md`
 
 ---
 
@@ -597,7 +597,7 @@ Files: <N> created, <M> modified (+<lines> -<lines>)
 Blockers: <None or list>
 Deviations: <None or list>
 
-Full Report: .workflow-logs/phases/phase-{phase_number}/REPORT.md
+Full Report: .workflow-logs/active/phases/phase-{phase_number}/REPORT.md
 
 Ready for Merge: Yes/No
 <If No, explain what needs fixing>

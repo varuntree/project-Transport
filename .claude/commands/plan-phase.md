@@ -9,7 +9,7 @@ Create checkpoint-driven implementation plan through exploration, research, and 
 /plan-phase 2
 /plan-phase 0
 ```
-Creates plan for specified phase from oracle/phases/PHASE_N_*.md
+Creates plan for specified phase from docs/phases/PHASE_N_*.md
 
 **For custom/ad-hoc planning:**
 ```
@@ -35,19 +35,19 @@ If $1 matches pattern "^\d+$" (e.g., "0", "2", "5"):
   - Plan type: PHASE
   - Phase number: $1
   - Plan name: "phase-{$1}"
-  - Output: specs/phase-{$1}-implementation-plan.md
-  - Logs: .workflow-logs/phases/phase-{$1}/
+  - Output: plans/phase-{$1}-implementation-plan.md
+  - Logs: .workflow-logs/active/phases/phase-{$1}/
 
 Else:
   - Plan type: CUSTOM
   - Plan name: sanitized($1) (lowercase, hyphens, no spaces)
   - Description: "$1 $2" (combined args)
-  - Output: specs/{plan_name}-plan.md
-  - Logs: .workflow-logs/custom/{plan_name}/
+  - Output: plans/{plan_name}-plan.md
+  - Logs: .workflow-logs/active/custom/{plan_name}/
 ```
 
 **Detection Examples:**
-- `/plan-phase 2` → PHASE (reads oracle/phases/PHASE_2_*.md)
+- `/plan-phase 2` → PHASE (reads docs/phases/PHASE_2_*.md)
 - `/plan-phase "celery alert matcher fixes"` → CUSTOM (explores codebase for celery/alert)
 - `/plan-phase route-caching optimization` → CUSTOM (searches for route caching code)
 
@@ -64,10 +64,10 @@ Else:
 **Create logging folder:**
 ```bash
 # PHASE plan:
-mkdir -p .workflow-logs/phases/phase-{phase_number}
+mkdir -p .workflow-logs/active/phases/phase-{phase_number}
 
 # CUSTOM plan:
-mkdir -p .workflow-logs/custom/{plan_name}
+mkdir -p .workflow-logs/active/custom/{plan_name}
 ```
 
 ### 1.1 Deploy Deep Exploration Subagent
@@ -86,24 +86,24 @@ Your task: Read all relevant documentation for Phase {phase_number} and produce 
 Thoroughness: very thorough
 
 Read these documents:
-1. oracle/phases/PHASE_{phase_number}_*.md (phase specification)
-2. oracle/DEVELOPMENT_STANDARDS.md (coding patterns)
-3. oracle/IMPLEMENTATION_ROADMAP.md (phase dependencies)
+1. docs/phases/PHASE_{phase_number}_*.md (phase specification)
+2. docs/standards/DEVELOPMENT_STANDARDS.md (coding patterns)
+3. docs/IMPLEMENTATION_ROADMAP.md (phase dependencies)
 4. Relevant architecture specs:
-   - oracle/specs/SYSTEM_OVERVIEW.md (always)
-   - oracle/specs/DATA_ARCHITECTURE.md (if Phases 1-2)
-   - oracle/specs/BACKEND_SPECIFICATION.md (if backend work)
-   - oracle/specs/IOS_APP_SPECIFICATION.md (if iOS work)
-   - oracle/specs/INTEGRATION_CONTRACTS.md (if API/auth work)
+   - docs/architecture/SYSTEM_OVERVIEW.md (always)
+   - docs/architecture/DATA_ARCHITECTURE.md (if Phases 1-2)
+   - docs/architecture/BACKEND_SPECIFICATION.md (if backend work)
+   - docs/architecture/IOS_APP_SPECIFICATION.md (if iOS work)
+   - docs/architecture/INTEGRATION_CONTRACTS.md (if API/auth work)
 5. Previous phase artifacts (if phase > 0):
-   - .workflow-logs/phases/phase-{phase_number - 1}/*.json
+   - .workflow-logs/active/phases/phase-{phase_number - 1}/*.json
    - Git log: git log --grep='phase {phase_number - 1}' --oneline -20
    - Implementation files (backend/app/**, SydneyTransit/**)
 6. Current codebase state:
    - git status
    - Project structure (ls -R backend/ SydneyTransit/ 2>/dev/null)
 
-Return structured JSON (save to .workflow-logs/phases/phase-{phase_number}/exploration-report.json):
+Return structured JSON (save to .workflow-logs/active/phases/phase-{phase_number}/exploration-report.json):
 {
   \"plan_type\": \"PHASE\",
   \"phase_number\": {phase_number},
@@ -163,7 +163,7 @@ Token budget: Return concise JSON (~2000 tokens max). Main planner will referenc
 **Save exploration output:**
 ```bash
 # Subagent will return JSON - save it
-echo '<subagent_json_output>' > .workflow-logs/phases/phase-{phase_number}/exploration-report.json
+echo '<subagent_json_output>' > .workflow-logs/active/phases/phase-{phase_number}/exploration-report.json
 ```
 
 ---
@@ -185,13 +185,13 @@ PLAN CONTEXT:
 - Purpose: Ad-hoc planning for intermediary work not covered in phase specs
 
 Read these documents:
-1. oracle/DEVELOPMENT_STANDARDS.md (coding patterns - always)
+1. docs/standards/DEVELOPMENT_STANDARDS.md (coding patterns - always)
 2. Relevant architecture specs based on plan description:
-   - oracle/specs/SYSTEM_OVERVIEW.md (if unclear what plan touches)
-   - oracle/specs/DATA_ARCHITECTURE.md (if mentions: GTFS, database, caching, Redis)
-   - oracle/specs/BACKEND_SPECIFICATION.md (if mentions: API, Celery, tasks, backend)
-   - oracle/specs/IOS_APP_SPECIFICATION.md (if mentions: iOS, Swift, UI, app)
-   - oracle/specs/INTEGRATION_CONTRACTS.md (if mentions: API contracts, auth, APNs)
+   - docs/architecture/SYSTEM_OVERVIEW.md (if unclear what plan touches)
+   - docs/architecture/DATA_ARCHITECTURE.md (if mentions: GTFS, database, caching, Redis)
+   - docs/architecture/BACKEND_SPECIFICATION.md (if mentions: API, Celery, tasks, backend)
+   - docs/architecture/IOS_APP_SPECIFICATION.md (if mentions: iOS, Swift, UI, app)
+   - docs/architecture/INTEGRATION_CONTRACTS.md (if mentions: API contracts, auth, APNs)
 3. Current implementation state:
    - git status
    - git log --oneline -20 (recent commits for context)
@@ -199,8 +199,8 @@ Read these documents:
      * grep -r '<keywords from description>' backend/ SydneyTransit/ --files-with-matches
      * ls -la relevant directories
 4. Existing phase artifacts (if relevant):
-   - .workflow-logs/phases/phase-*/exploration-report.json (check recent phases)
-   - specs/phase-*-implementation-plan.md (check if related work was planned)
+   - .workflow-logs/active/phases/phase-*/exploration-report.json (check recent phases)
+   - plans/phase-*-implementation-plan.md (check if related work was planned)
 
 ANALYSIS FOCUS:
 - What does plan description ask to solve?
@@ -209,7 +209,7 @@ ANALYSIS FOCUS:
 - What's missing from current implementation?
 - What are the constraints (technical, cost, performance)?
 
-Return structured JSON (save to .workflow-logs/custom/{plan_name}/exploration-report.json):
+Return structured JSON (save to .workflow-logs/active/custom/{plan_name}/exploration-report.json):
 {
   \"plan_type\": \"CUSTOM\",
   \"plan_name\": \"{plan_name}\",
@@ -275,7 +275,7 @@ Token budget: Return concise JSON (~2000 tokens max). Main planner will referenc
 **Save exploration output:**
 ```bash
 # Subagent will return JSON - save it
-echo '<subagent_json_output>' > .workflow-logs/custom/{plan_name}/exploration-report.json
+echo '<subagent_json_output>' > .workflow-logs/active/custom/{plan_name}/exploration-report.json
 ```
 
 ---
@@ -300,13 +300,13 @@ Your task: Research iOS topics for {plan_name or Phase phase_number} using Apple
 
 CONTEXT:
 1. **Exploration Report:**
-   Read .workflow-logs/{plan_folder}/exploration-report.json
+   Read .workflow-logs/active/{plan_folder}/exploration-report.json
    (plan_folder = phase-{phase_number} for PHASE plans, {plan_name} for CUSTOM plans)
    - Focus on `ios_research_needed` array (topics requiring research)
    - Reference `checkpoints` to understand where iOS patterns will be used
 
 2. **Specification:**
-   For PHASE plans: Read oracle/phases/PHASE_{phase_number}_*.md
+   For PHASE plans: Read docs/phases/PHASE_{phase_number}_*.md
    For CUSTOM plans: Use exploration report context_summary and affected_systems
    - Understand iOS implementation requirements
    - Identify specific iOS frameworks/APIs needed
@@ -324,7 +324,7 @@ For each topic in `ios_research_needed` array:
    - Extract: Key patterns, code examples, API signatures, gotchas
 
 3. **Create Concise Research File:**
-   Save to: .workflow-logs/{plan_folder}/ios-research-<topic-slug>.md
+   Save to: .workflow-logs/active/{plan_folder}/ios-research-<topic-slug>.md
 
    Format:
    ```markdown
@@ -376,7 +376,7 @@ Common topics you may encounter:
 VALIDATION:
 - Each research file must have: Key Pattern, Code Example, Critical Constraints, Common Gotchas, API Reference
 - Code examples must compile (check Swift syntax)
-- All files saved to .workflow-logs/{plan_folder}/
+- All files saved to .workflow-logs/active/{plan_folder}/
 
 RETURN FORMAT (JSON):
 {
@@ -404,7 +404,7 @@ DO NOT:
 
 **Save research summary:**
 ```bash
-echo '<subagent_json_output>' > .workflow-logs/{plan_folder}/ios-research-summary.json
+echo '<subagent_json_output>' > .workflow-logs/active/{plan_folder}/ios-research-summary.json
 ```
 
 ---
@@ -432,8 +432,8 @@ Review exploration report and identify ambiguities:
 ## Stage 4: Create Checkpoint-Driven Plan
 
 **Plan File:**
-- PHASE plans: `specs/phase-{phase_number}-implementation-plan.md`
-- CUSTOM plans: `specs/{plan_name}-plan.md`
+- PHASE plans: `plans/phase-{phase_number}-implementation-plan.md`
+- CUSTOM plans: `plans/{plan_name}-plan.md`
 
 **Guidelines:**
 - Use checkpoints (not step-by-step instructions)
@@ -499,7 +499,7 @@ Review exploration report and identify ambiguities:
 **References:**
 - Pattern: <from exploration report critical_patterns>
 - Architecture: <spec file:section>
-- iOS Research: `.workflow-logs/phases/phase-{phase_number}/ios-research-<topic>.md`
+- iOS Research: `.workflow-logs/active/phases/phase-{phase_number}/ios-research-<topic>.md`
 
 ---
 
@@ -542,7 +542,7 @@ Review exploration report and identify ambiguities:
 
 ## Exploration Report
 
-Attached: `.workflow-logs/phases/phase-{phase_number}/exploration-report.json`
+Attached: `.workflow-logs/active/phases/phase-{phase_number}/exploration-report.json`
 
 ---
 
@@ -620,7 +620,7 @@ Attached: `.workflow-logs/phases/phase-{phase_number}/exploration-report.json`
 **References:**
 - Pattern: <from exploration report critical_patterns>
 - Architecture: <spec file:section>
-- iOS Research: `.workflow-logs/custom/{plan_name}/ios-research-<topic>.md` (if applicable)
+- iOS Research: `.workflow-logs/active/custom/{plan_name}/ios-research-<topic>.md` (if applicable)
 
 ---
 
@@ -672,7 +672,7 @@ Attached: `.workflow-logs/phases/phase-{phase_number}/exploration-report.json`
 
 ## Exploration Report
 
-Attached: `.workflow-logs/custom/{plan_name}/exploration-report.json`
+Attached: `.workflow-logs/active/custom/{plan_name}/exploration-report.json`
 
 ---
 
@@ -694,7 +694,7 @@ Attached: `.workflow-logs/custom/{plan_name}/exploration-report.json`
 
 **Cross-check:**
 For PHASE plans:
-- Re-read `oracle/phases/PHASE_{phase_number}_*.md`
+- Re-read `docs/phases/PHASE_{phase_number}_*.md`
 - Ensure every deliverable from phase spec appears in checkpoints
 - Verify no scope creep (only what's in phase spec)
 
@@ -711,7 +711,7 @@ Provide concise report:
 
 **For PHASE plans:**
 ```
-Plan Created: specs/phase-{phase_number}-implementation-plan.md
+Plan Created: plans/phase-{phase_number}-implementation-plan.md
 
 Summary:
 - <High-level goal 1>
@@ -725,7 +725,7 @@ Exploration:
 - Checkpoints: <N checkpoints defined>
 
 iOS Research:
-- <Topic 1> researched → .workflow-logs/phases/phase-{phase_number}/ios-research-<topic>.md
+- <Topic 1> researched → .workflow-logs/active/phases/phase-{phase_number}/ios-research-<topic>.md
 - <Topic 2> researched
 - <Or "No iOS work in this phase">
 
@@ -741,7 +741,7 @@ Next: Run /implement-phase {phase_number}
 
 **For CUSTOM plans:**
 ```
-Plan Created: specs/{plan_name}-plan.md
+Plan Created: plans/{plan_name}-plan.md
 
 Summary:
 - Problem: <1-sentence problem statement>
@@ -755,7 +755,7 @@ Exploration:
 - Checkpoints: <N checkpoints defined>
 
 iOS Research:
-- <Topic 1> researched → .workflow-logs/custom/{plan_name}/ios-research-<topic>.md
+- <Topic 1> researched → .workflow-logs/active/custom/{plan_name}/ios-research-<topic>.md
 - <Or "No iOS work">
 
 Related Phases:

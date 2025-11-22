@@ -41,14 +41,14 @@ plan_name: $1 (required: name of plan from /plan command)
 
 2. **Exploration report:**
    ```bash
-   cat .workflow-logs/custom/{plan_name}/exploration-report.json
+   cat .workflow-logs/active/custom/{plan_name}/exploration-report.json
    ```
    (~2K tokens - compressed reference)
 
 3. **iOS research (if exists):**
    ```bash
    # Check research summary
-   cat .workflow-logs/custom/{plan_name}/ios-research-summary.json 2>/dev/null || echo "No iOS research"
+   cat .workflow-logs/active/custom/{plan_name}/ios-research-summary.json 2>/dev/null || echo "No iOS research"
 
    # Load research files referenced in checkpoints (on-demand)
    # Do NOT load all at once - load per checkpoint as needed
@@ -58,7 +58,7 @@ plan_name: $1 (required: name of plan from /plan command)
 
 **Log state:**
 ```bash
-echo '{"stage":"context_loaded","plan_name":"'{plan_name}'","exploration_tokens":2000,"plan_tokens":2000}' > .workflow-logs/custom/{plan_name}/orchestrator-state.json
+echo '{"stage":"context_loaded","plan_name":"'{plan_name}'","exploration_tokens":2000,"plan_tokens":2000}' > .workflow-logs/active/custom/{plan_name}/orchestrator-state.json
 ```
 
 ---
@@ -91,7 +91,7 @@ For each checkpoint from implementation plan:
 
 ### Design Template
 
-Create `.workflow-logs/custom/{plan_name}/checkpoint-{N}-design.md`:
+Create `.workflow-logs/active/custom/{plan_name}/checkpoint-{N}-design.md`:
 
 ```markdown
 # Checkpoint {N}: <Name>
@@ -134,7 +134,7 @@ Create `.workflow-logs/custom/{plan_name}/checkpoint-{N}-design.md`:
 
 ## References for Subagent
 - Exploration report: `critical_patterns` → <specific pattern>
-- iOS research: `.workflow-logs/custom/{plan_name}/ios-research-<topic>.md`
+- iOS research: `.workflow-logs/active/custom/{plan_name}/ios-research-<topic>.md`
 - Standards: DEVELOPMENT_STANDARDS.md:Section X
 - Architecture: <spec file>:Section Y
 - Previous checkpoint: <if depends on previous checkpoint result>
@@ -170,7 +170,7 @@ PLAN CONTEXT:
 - Your checkpoint: <Specific goal>
 
 CHECKPOINT DESIGN:
-<Paste full design from .workflow-logs/custom/{plan_name}/checkpoint-{N}-design.md>
+<Paste full design from .workflow-logs/active/custom/{plan_name}/checkpoint-{N}-design.md>
 
 PREVIOUS CHECKPOINT RESULT (if N > 1):
 <From previous subagent JSON return>
@@ -182,9 +182,9 @@ PREVIOUS CHECKPOINT RESULT (if N > 1):
 }
 
 REFERENCES (Read if needed):
-- Exploration patterns: .workflow-logs/custom/{plan_name}/exploration-report.json → critical_patterns
-- iOS research: .workflow-logs/custom/{plan_name}/ios-research-summary.json (see which files exist)
-  - Load specific research file: .workflow-logs/custom/{plan_name}/ios-research-<topic>.md (only if checkpoint needs it)
+- Exploration patterns: .workflow-logs/active/custom/{plan_name}/exploration-report.json → critical_patterns
+- iOS research: .workflow-logs/active/custom/{plan_name}/ios-research-summary.json (see which files exist)
+  - Load specific research file: .workflow-logs/active/custom/{plan_name}/ios-research-<topic>.md (only if checkpoint needs it)
 - Standards: DEVELOPMENT_STANDARDS.md (specific sections in design)
 - Architecture specs: <From design references>
 - Example code: <From exploration report example_location>
@@ -207,7 +207,7 @@ Before implementing any pattern/library/API:
 - NEVER hallucinate - if confidence <80%, READ the reference docs
 
 If uncertain:
-- iOS patterns → Check .workflow-logs/custom/{plan_name}/ios-research-summary.json for relevant topic, then read that specific research file
+- iOS patterns → Check .workflow-logs/active/custom/{plan_name}/ios-research-summary.json for relevant topic, then read that specific research file
 - Backend patterns → Read DEVELOPMENT_STANDARDS.md section
 - External service → Use WebFetch or search for official docs
 - Return "blocked" status if truly stuck (don't guess, NEVER hallucinate iOS APIs)
@@ -304,7 +304,7 @@ Task tool:
      "validation_output": "<output>",
      "expected_output": "<from design>",
      "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
-   }' > .workflow-logs/custom/{plan_name}/checkpoint-{N}-validation-failure.json
+   }' > .workflow-logs/active/custom/{plan_name}/checkpoint-{N}-validation-failure.json
    ```
 
 2. **Invoke /fix-bug:**
@@ -338,9 +338,9 @@ Task tool:
 git add .
 
 # Save subagent result
-echo '<subagent_json>' > .workflow-logs/custom/{plan_name}/checkpoint-{N}-result.json
+echo '<subagent_json>' > .workflow-logs/active/custom/{plan_name}/checkpoint-{N}-result.json
 
-git add .workflow-logs/custom/{plan_name}/
+git add .workflow-logs/active/custom/{plan_name}/
 
 git commit -m "feat({plan_name}): checkpoint {N} - <name>
 
@@ -371,7 +371,7 @@ echo '{
   "status": "<from subagent>",
   "files_created": '<count>',
   "next_checkpoint_context": "<from subagent result>"
-}' >> .workflow-logs/custom/{plan_name}/orchestrator-state.json
+}' >> .workflow-logs/active/custom/{plan_name}/orchestrator-state.json
 ```
 
 ### 4.6 Repeat for Next Checkpoint
@@ -441,7 +441,7 @@ git tag {plan_name}-complete
 
 **Orchestrator generates:**
 
-`.workflow-logs/custom/{plan_name}/completion-report.json`:
+`.workflow-logs/active/custom/{plan_name}/completion-report.json`:
 
 ```json
 {
@@ -574,7 +574,7 @@ git diff --stat main..{plan_name}-implementation
 **Total Implementation Time:** <duration>
 ```
 
-Save to: `.workflow-logs/custom/{plan_name}/REPORT.md`
+Save to: `.workflow-logs/active/custom/{plan_name}/REPORT.md`
 
 ---
 
@@ -604,7 +604,7 @@ Files: <N> created, <M> modified (+<lines> -<lines>)
 Blockers: <None or list>
 Deviations: <None or list>
 
-Full Report: .workflow-logs/custom/{plan_name}/REPORT.md
+Full Report: .workflow-logs/active/custom/{plan_name}/REPORT.md
 
 Ready for Merge: Yes/No
 <If No, explain what needs fixing>

@@ -8,7 +8,7 @@ task: $1 (required: high-level task description for Oracle - e.g., "fix real-tim
 
 ## Instructions
 
-**Goal:** Generate two files in `docs/oracle/` for external Oracle consultation:
+**Goal:** Generate two files in `.workflow-logs/exports/` for external Oracle consultation:
 1. `oracle-context-{timestamp}.txt` - Packed code with tree structure (<35k tokens)
 2. `oracle-instructions-{timestamp}.md` - Detailed task brief with response format
 
@@ -53,7 +53,7 @@ echo ""
    - **Keyword grep**: Extract nouns/verbs from task (e.g., "real-time poller" → grep "poll", "gtfs_rt", "celery")
    - **Git context**: Include modified/staged files from `git status`
    - **Import graph**: For Python/Swift, trace imports of discovered files
-   - **Specs**: Auto-include relevant `oracle/specs/*.md` if architecture-related
+   - **Specs**: Auto-include relevant `docs/architecture/*.md` if architecture-related
 
 4. **Rank files by relevance score:**
    ```
@@ -116,7 +116,7 @@ echo ""
    {file_content}
 
    ──────────────────────────────────────
-   File: oracle/specs/BACKEND_SPECIFICATION.md
+   File: docs/architecture/BACKEND_SPECIFICATION.md
    ──────────────────────────────────────
    {file_content}
 
@@ -162,7 +162,7 @@ echo ""
 - NSW API: 5 req/s limit, 60K calls/day
 - Stack fixed (no new services)
 
-**Architecture Docs:** `oracle/specs/` (SYSTEM_OVERVIEW, DATA_ARCHITECTURE, BACKEND_SPECIFICATION, IOS_APP_SPECIFICATION, INTEGRATION_CONTRACTS, DEVELOPMENT_STANDARDS)
+**Architecture Docs:** `docs/architecture/` (SYSTEM_OVERVIEW, DATA_ARCHITECTURE, BACKEND_SPECIFICATION, IOS_APP_SPECIFICATION, INTEGRATION_CONTRACTS), `docs/standards/DEVELOPMENT_STANDARDS.md`
 
 ---
 
@@ -221,7 +221,7 @@ Markdown file with sections above. Reference code using:
 
 ## Codebase Context
 
-See: `docs/oracle/oracle-context-{timestamp}.txt` ({token_count} tokens)
+See: `.workflow-logs/exports/oracle-context-{timestamp}.txt` ({token_count} tokens)
 ```
 
 ### Step 5: Output & Summary
@@ -230,8 +230,8 @@ See: `docs/oracle/oracle-context-{timestamp}.txt` ({token_count} tokens)
 echo ""
 echo "✅ Oracle consultation files generated:"
 echo ""
-echo "📦 Context:      docs/oracle/oracle-context-${timestamp}-${task_slug}.txt"
-echo "📋 Instructions: docs/oracle/oracle-instructions-${timestamp}-${task_slug}.md"
+echo "📦 Context:      .workflow-logs/exports/oracle-context-${timestamp}-${task_slug}.txt"
+echo "📋 Instructions: .workflow-logs/exports/oracle-instructions-${timestamp}-${task_slug}.md"
 echo ""
 echo "Token estimate:  ~{token_count} tokens"
 echo "Files included:  {file_count}"
@@ -279,7 +279,7 @@ echo ""
    ```
 
 6. **Specs inclusion logic:**
-   - Task mentions "architecture/design/specs" → include all `oracle/specs/*.md`
+   - Task mentions "architecture/design/specs" → include all `docs/architecture/*.md`
    - Task mentions specific domain → include relevant spec:
      - "backend/API/celery/tasks" → BACKEND_SPECIFICATION.md
      - "iOS/SwiftUI/app" → IOS_APP_SPECIFICATION.md

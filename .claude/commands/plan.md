@@ -37,7 +37,7 @@ plan_name = sanitize($1)
 
 Plan outputs:
   - Plan file: specs/{plan_name}-plan.md
-  - Logs folder: .workflow-logs/custom/{plan_name}/
+  - Logs folder: .workflow-logs/active/custom/{plan_name}/
 ```
 
 ---
@@ -48,7 +48,7 @@ Plan outputs:
 
 **Create logging folder:**
 ```bash
-mkdir -p .workflow-logs/custom/{plan_name}
+mkdir -p .workflow-logs/active/custom/{plan_name}
 ```
 
 ### 1.1 Deploy Deep Exploration Subagent
@@ -72,13 +72,13 @@ PLAN CONTEXT:
 - Purpose: Ad-hoc planning for work not covered in phase specs
 
 Read these documents:
-1. oracle/DEVELOPMENT_STANDARDS.md (coding patterns - always)
+1. docs/standards/DEVELOPMENT_STANDARDS.md (coding patterns - always)
 2. Relevant architecture specs based on task description:
-   - oracle/specs/SYSTEM_OVERVIEW.md (if unclear what task touches)
-   - oracle/specs/DATA_ARCHITECTURE.md (if mentions: GTFS, database, caching, Redis, patterns)
-   - oracle/specs/BACKEND_SPECIFICATION.md (if mentions: API, Celery, tasks, backend, routes)
-   - oracle/specs/IOS_APP_SPECIFICATION.md (if mentions: iOS, Swift, UI, app, SwiftUI)
-   - oracle/specs/INTEGRATION_CONTRACTS.md (if mentions: API contracts, auth, APNs, sync)
+   - docs/architecture/SYSTEM_OVERVIEW.md (if unclear what task touches)
+   - docs/architecture/DATA_ARCHITECTURE.md (if mentions: GTFS, database, caching, Redis, patterns)
+   - docs/architecture/BACKEND_SPECIFICATION.md (if mentions: API, Celery, tasks, backend, routes)
+   - docs/architecture/IOS_APP_SPECIFICATION.md (if mentions: iOS, Swift, UI, app, SwiftUI)
+   - docs/architecture/INTEGRATION_CONTRACTS.md (if mentions: API contracts, auth, APNs, sync)
 3. Current implementation state:
    - git status
    - git log --oneline -20 (recent commits for context)
@@ -87,8 +87,8 @@ Read these documents:
      * grep -r '<keywords from description>' SydneyTransit/ --files-with-matches (if iOS work)
      * Find relevant files (stop when you have comprehensive coverage)
 4. Existing artifacts (if relevant):
-   - .workflow-logs/phases/phase-*/exploration-report.json (check recent phases)
-   - .workflow-logs/custom/*/exploration-report.json (check related custom work)
+   - .workflow-logs/active/phases/phase-*/exploration-report.json (check recent phases)
+   - .workflow-logs/active/custom/*/exploration-report.json (check related custom work)
    - specs/phase-*-implementation-plan.md (check if related work was planned)
    - specs/*-plan.md (check other custom plans)
 
@@ -100,7 +100,7 @@ ANALYSIS FOCUS:
 - What are the constraints (technical, cost, performance)?
 - Is this fixing a bug, adding a feature, refactoring, or optimizing?
 
-Return structured JSON (save to .workflow-logs/custom/{plan_name}/exploration-report.json):
+Return structured JSON (save to .workflow-logs/active/custom/{plan_name}/exploration-report.json):
 {
   \"plan_type\": \"CUSTOM\",
   \"plan_name\": \"{plan_name}\",
@@ -169,7 +169,7 @@ Token budget: Return concise JSON (~2000 tokens max). Main planner will referenc
 **Save exploration output:**
 ```bash
 # Subagent will return JSON - save it
-echo '<subagent_json_output>' > .workflow-logs/custom/{plan_name}/exploration-report.json
+echo '<subagent_json_output>' > .workflow-logs/active/custom/{plan_name}/exploration-report.json
 ```
 
 ---
@@ -194,7 +194,7 @@ Your task: Research iOS topics for custom plan '{plan_name}' using Apple Documen
 
 CONTEXT:
 1. **Exploration Report:**
-   Read .workflow-logs/custom/{plan_name}/exploration-report.json
+   Read .workflow-logs/active/custom/{plan_name}/exploration-report.json
    - Focus on `ios_research_needed` array (topics requiring research)
    - Reference `checkpoints` to understand where iOS patterns will be used
 
@@ -216,7 +216,7 @@ For each topic in `ios_research_needed` array:
    - Extract: Key patterns, code examples, API signatures, gotchas
 
 3. **Create Concise Research File:**
-   Save to: .workflow-logs/custom/{plan_name}/ios-research-<topic-slug>.md
+   Save to: .workflow-logs/active/custom/{plan_name}/ios-research-<topic-slug>.md
 
    Format:
    ```markdown
@@ -268,14 +268,14 @@ Common topics you may encounter:
 VALIDATION:
 - Each research file must have: Key Pattern, Code Example, Critical Constraints, Common Gotchas, API Reference
 - Code examples must compile (check Swift syntax)
-- All files saved to .workflow-logs/custom/{plan_name}/
+- All files saved to .workflow-logs/active/custom/{plan_name}/
 
 RETURN FORMAT (JSON):
 {
   \"topics_researched\": [
     {
       \"topic\": \"SwiftUI refreshable modifier\",
-      \"file\": \".workflow-logs/custom/{plan_name}/ios-research-swiftui-refreshable.md\",
+      \"file\": \".workflow-logs/active/custom/{plan_name}/ios-research-swiftui-refreshable.md\",
       \"key_finding\": \"1-sentence summary of critical pattern\",
       \"apple_docs_url\": \"https://developer.apple.com/documentation/...\"
     }
@@ -296,7 +296,7 @@ DO NOT:
 
 **Save research summary:**
 ```bash
-echo '<subagent_json_output>' > .workflow-logs/custom/{plan_name}/ios-research-summary.json
+echo '<subagent_json_output>' > .workflow-logs/active/custom/{plan_name}/ios-research-summary.json
 ```
 
 ---
@@ -403,7 +403,7 @@ Review exploration report and identify ambiguities:
 **References:**
 - Pattern: {from exploration report critical_patterns}
 - Architecture: {spec file:section}
-- iOS Research: `.workflow-logs/custom/{plan_name}/ios-research-{topic}.md` (if applicable)
+- iOS Research: `.workflow-logs/active/custom/{plan_name}/ios-research-{topic}.md` (if applicable)
 
 ---
 
@@ -456,7 +456,7 @@ Review exploration report and identify ambiguities:
 
 ## Exploration Report
 
-Attached: `.workflow-logs/custom/{plan_name}/exploration-report.json`
+Attached: `.workflow-logs/active/custom/{plan_name}/exploration-report.json`
 
 ---
 
@@ -502,7 +502,7 @@ Exploration:
 - Checkpoints: {N checkpoints defined}
 
 iOS Research:
-- {Topic 1} researched → .workflow-logs/custom/{plan_name}/ios-research-{topic}.md
+- {Topic 1} researched → .workflow-logs/active/custom/{plan_name}/ios-research-{topic}.md
 - {Or "No iOS work"}
 
 Related Phases:
