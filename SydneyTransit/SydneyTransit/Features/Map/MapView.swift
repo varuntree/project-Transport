@@ -59,7 +59,10 @@ struct MapView: View {
                     stop: selectedStop,
                     departures: viewModel.departures,
                     isLoading: viewModel.isLoadingDepartures,
-                    errorMessage: viewModel.departuresErrorMessage
+                    errorMessage: viewModel.departuresErrorMessage,
+                    alerts: viewModel.alerts,
+                    isLoadingAlerts: viewModel.isLoadingAlerts,
+                    alertError: viewModel.alertError
                 )
                 .presentationDetents([.fraction(0.15), .medium, .large])
                 .presentationDragIndicator(.visible)

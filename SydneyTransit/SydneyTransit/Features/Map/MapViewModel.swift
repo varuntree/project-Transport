@@ -14,12 +14,22 @@ class MapViewModel: NSObject, ObservableObject {
     @Published var isLoadingDepartures = false
     @Published var departuresErrorMessage: String?
 
+    // Alert state
+    @Published var alerts: [ServiceAlert] = []
+    @Published var isLoadingAlerts = false
+    @Published var alertError: Error?
+
     private var loadedDepartureIds = Set<String>()  // Deduplication by full ID (tripId_scheduledTime)
     private var regionChangeTask: Task<Void, Never>?
     private let dbManager = DatabaseManager.shared
+    private let alertRepository: AlertRepository
 
     // Track last loaded region to avoid redundant queries
     private var lastLoadedRegion: MKCoordinateRegion?
+
+    init(alertRepository: AlertRepository = AlertRepositoryImpl()) {
+        self.alertRepository = alertRepository
+    }
 
     /// Load stops for visible map region with debouncing
     /// Called from MapView when region changes
@@ -112,8 +122,69 @@ class MapViewModel: NSObject, ObservableObject {
     func selectStop(_ stop: Stop) {
         selectedStop = stop
         Task {
-            await loadDepartures(for: stop)
+            await loadInitialData(for: stop)
         }
+    }
+
+    /// Load both departures and alerts in parallel
+    private func loadInitialData(for stop: Stop) async {
+        // Fetch alerts and departures in parallel
+        async let alertsTask = loadAlerts(for: stop)
+        async let departuresTask = loadDepartures(for: stop)
+
+        await alertsTask
+        await departuresTask
+    }
+
+    /// Load service alerts for selected stop
+    private func loadAlerts(for stop: Stop) async {
+        isLoadingAlerts = true
+        alertError = nil
+
+        do {
+            // Get GTFS stop_id from dict_stop table
+            guard let stopId = try stop.getStopID() else {
+                alertError = NSError(
+                    domain: "AlertLoad",
+                    code: -1,
+                    userInfo: [NSLocalizedDescriptionKey: "Stop ID mapping missing"]
+                )
+                Logger.map.error(
+                    "drawer_alerts_missing_stop_id",
+                    metadata: .from([
+                        "sid": stop.sid,
+                        "stop_name": stop.stopName
+                    ])
+                )
+                isLoadingAlerts = false
+                return
+            }
+
+            // Fetch alerts from API
+            let fetchedAlerts = try await alertRepository.fetchAlerts(stopId: stopId)
+            alerts = fetchedAlerts
+
+            Logger.map.info(
+                "drawer_alerts_loaded",
+                metadata: .from([
+                    "stop_id": stopId,
+                    "stop_name": stop.stopName,
+                    "count": fetchedAlerts.count
+                ])
+            )
+        } catch {
+            alertError = error
+            Logger.map.error(
+                "drawer_alerts_load_failed",
+                metadata: .from([
+                    "sid": stop.sid,
+                    "error": error.localizedDescription
+                ])
+            )
+            // Don't crash - graceful degradation
+        }
+
+        isLoadingAlerts = false
     }
 
     /// Load static departures for selected stop
@@ -171,6 +242,8 @@ class MapViewModel: NSObject, ObservableObject {
         selectedStop = nil
         departures = []
         departuresErrorMessage = nil
+        alerts = []
+        alertError = nil
         loadedDepartureIds.removeAll()
     }
 

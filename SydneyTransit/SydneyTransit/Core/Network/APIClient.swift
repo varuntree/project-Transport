@@ -134,6 +134,62 @@ class APIClient {
             throw APIError.networkError(error)
         }
     }
+
+    /// Generic GET request for custom endpoints
+    /// - Parameter path: URL path (e.g., "/api/v1/stops/123/alerts")
+    /// - Returns: Decoded response of type T
+    func get<T: Decodable>(_ path: String) async throws -> T {
+        guard let url = URL(string: baseURL + path) else {
+            throw APIError.invalidResponse
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        #if DEBUG
+        print("[APIClient] GET URL: \(url.absoluteString)")
+        #endif
+
+        do {
+            let (data, response) = try await session.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw APIError.invalidResponse
+            }
+
+            // Handle timeout
+            if httpResponse.statusCode == 408 {
+                throw APIError.timeout
+            }
+
+            // Handle server errors
+            if httpResponse.statusCode >= 400 {
+                let errorMessage = try? JSONDecoder().decode(ErrorResponse.self, from: data)
+                throw APIError.serverError(
+                    statusCode: httpResponse.statusCode,
+                    message: errorMessage?.error.message
+                )
+            }
+
+            // Decode response
+            do {
+                return try JSONDecoder().decode(T.self, from: data)
+            } catch {
+                throw APIError.decodingError(error)
+            }
+
+        } catch let error as APIError {
+            throw error
+        } catch {
+            if let urlError = error as? URLError {
+                if urlError.code == .timedOut {
+                    throw APIError.timeout
+                }
+            }
+            throw APIError.networkError(error)
+        }
+    }
 }
 
 // Error response structure (matches backend envelope)

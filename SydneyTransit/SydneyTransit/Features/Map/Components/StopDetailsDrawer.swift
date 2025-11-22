@@ -9,6 +9,11 @@ struct StopDetailsDrawer: View {
     let isLoading: Bool
     let errorMessage: String?
 
+    // Alert state
+    let alerts: [ServiceAlert]
+    let isLoadingAlerts: Bool
+    let alertError: Error?
+
     @Environment(\.presentationDetent) private var detent
 
     var body: some View {
@@ -79,6 +84,9 @@ struct StopDetailsDrawer: View {
     @ViewBuilder
     private var halfDetentContent: some View {
         VStack(spacing: 0) {
+            // Service Alerts Section
+            alertsSection
+
             if isLoading {
                 ProgressView("Loading departures...")
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -127,6 +135,9 @@ struct StopDetailsDrawer: View {
         } else {
             ScrollView {
                 VStack(spacing: 0) {
+                    // Service Alerts Section (inside scroll view)
+                    alertsSection
+
                     ForEach(departures.prefix(20)) { departure in
                         VStack(spacing: 0) {
                             DepartureCompactRow(departure: departure)
@@ -160,6 +171,35 @@ struct StopDetailsDrawer: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 40)
+    }
+
+    // MARK: - Service Alerts Section
+
+    @ViewBuilder
+    private var alertsSection: some View {
+        if isLoadingAlerts {
+            ProgressView()
+                .padding()
+        } else if !alerts.isEmpty {
+            VStack(spacing: 12) {
+                ForEach(alerts) { alert in
+                    AlertBanner(alert: alert)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+        } else if let alertError {
+            HStack {
+                Image(systemName: "exclamationmark.triangle")
+                    .foregroundColor(.orange)
+                Text("Could not load service alerts")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+        }
+        // If no alerts and no error, show nothing (graceful empty state)
     }
 
     // MARK: - Helpers
@@ -275,6 +315,9 @@ struct DepartureCompactRow: View {
         stop: mockStop,
         departures: mockDepartures,
         isLoading: false,
-        errorMessage: nil
+        errorMessage: nil,
+        alerts: [],
+        isLoadingAlerts: false,
+        alertError: nil
     )
 }
