@@ -349,76 +349,90 @@ class DatabaseManager {
 
     // MARK: - Nearby Stops (Phase 1.5)
 
-    /// Get stops near a specific location sorted by distance
+    /// Get nearest stops to a specific location sorted by distance
     /// Uses Haversine formula for distance calculation with bounding box optimization
+    /// Always returns nearest stops regardless of distance (user decides walkability)
     /// - Parameters:
     ///   - latitude: Center latitude
     ///   - longitude: Center longitude
-    ///   - radiusMeters: Search radius in meters (default 500)
     ///   - limit: Maximum stops to return (default 20)
     /// - Returns: Array of (Stop, distanceInMeters) sorted by distance
-    func getNearbyStops(
-        latitude: Double,
-        longitude: Double,
-        radiusMeters: Double = 500,
-        limit: Int = 20
-    ) throws -> [(Stop, Double)] {
-        let startTime = Date()
-
-        let results = try read { db in
-            // Optimization: Pre-filter with simple bounding box to avoid Haversine on all rows
+        func getNearbyStops(
+            latitude: Double,
+            longitude: Double,
+            limit: Int = 20
+        ) throws -> [(Stop, Double)] {
+            let startTime = Date()
+            
+            // Optimization: Pre-filter with simple bounding box to avoid scanning all rows
+            // Use ~2km bounding box for performance (covers most suburban scenarios)
             // 1 degree latitude is approx 111km
             // 1 degree longitude at Sydney (~34S) is approx 92km
-            let latDelta = (radiusMeters / 111000.0) * 1.2 // 20% buffer
-            let lonDelta = (radiusMeters / 92000.0) * 1.2
-
+            let searchRadiusKm = 2.0
+            let latDelta = searchRadiusKm / 111.0
+            let lonDelta = searchRadiusKm / 92.0
+            
             let minLat = latitude - latDelta
             let maxLat = latitude + latDelta
             let minLon = longitude - lonDelta
             let maxLon = longitude + lonDelta
-
-            let sql = """
-            SELECT *,
-                   (6371000 * acos(
-                       cos(radians(?)) * cos(radians(stop_lat)) *
-                       cos(radians(stop_lon) - radians(?)) +
-                       sin(radians(?)) * sin(radians(stop_lat))
-                   )) AS distance
-            FROM stops
-            WHERE stop_lat BETWEEN ? AND ?
-              AND stop_lon BETWEEN ? AND ?
-            HAVING distance < ?
-            ORDER BY distance ASC
-            LIMIT ?
-            """
-
-            let rows = try Row.fetchAll(
-                db,
-                sql: sql,
-                arguments: [latitude, longitude, latitude, minLat, maxLat, minLon, maxLon, radiusMeters, limit]
-            )
             
-            return try rows.map { row in
-                let stop = try Stop(row: row)
-                let distance: Double = row["distance"]
+            let stops = try read { db in
+                let sql = """
+                SELECT *
+                FROM stops
+                WHERE stop_lat BETWEEN ? AND ?
+                  AND stop_lon BETWEEN ? AND ?
+                """
+                
+                return try Stop.fetchAll(
+                    db,
+                    sql: sql,
+                    arguments: [minLat, maxLat, minLon, maxLon]
+                )
+            }
+            
+            // Calculate distances in Swift (SQLite math functions often missing)
+            let sortedResults = stops.compactMap { stop -> (Stop, Double)? in
+                let distance = self.haversineDistance(
+                    lat1: latitude,
+                    lon1: longitude,
+                    lat2: stop.stopLat,
+                    lon2: stop.stopLon
+                )
                 return (stop, distance)
             }
+            .sorted { $0.1 < $1.1 }
+            .prefix(limit)
+            
+            let results = Array(sortedResults)
+            
+            let durationMs = Int(Date().timeIntervalSince(startTime) * 1000)
+            Logger.database.info(
+                "nearby_stops_query",
+                metadata: .from([
+                    "count": results.count,
+                    "duration_ms": durationMs,
+                    "center": "(\(latitude),\(longitude))"
+                ])
+            )
+            
+            return results
         }
-
-        let durationMs = Int(Date().timeIntervalSince(startTime) * 1000)
-        Logger.database.info(
-            "nearby_stops_query",
-            metadata: .from([
-                "count": results.count,
-                "duration_ms": durationMs,
-                "center": "(\(latitude),\(longitude))",
-                "radius": radiusMeters
-            ])
-        )
-
-        return results
-    }
-
+        
+        // Haversine formula for distance in meters
+        private func haversineDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double) -> Double {
+            let R = 6371000.0 // Earth radius in meters
+            let dLat = (lat2 - lat1) * .pi / 180
+            let dLon = (lon2 - lon1) * .pi / 180
+            
+            let a = sin(dLat/2) * sin(dLat/2) +
+                    cos(lat1 * .pi / 180) * cos(lat2 * .pi / 180) *
+                    sin(dLon/2) * sin(dLon/2)
+            
+            let c = 2 * atan2(sqrt(a), sqrt(1-a))
+            return R * c
+        }
     private static var verifiedStopsIndexes = false
 
     /// Verify that spatial indexes exist for stops table

@@ -46,6 +46,14 @@ def generate_ios_db(output_path: str = str(DEFAULT_IOS_DB_PATH)) -> Dict[str, An
     # Ensure output directory exists
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
+    # Delete existing file to ensure fresh schema
+    if os.path.exists(output_path):
+        try:
+            os.remove(output_path)
+            logger.info("ios_db_removed_existing", path=output_path)
+        except OSError as e:
+            logger.warning("ios_db_remove_failed", path=output_path, error=str(e))
+
     try:
         # Step 1: Query Supabase for all tables
         logger.info("ios_db_stage_start", stage="fetch_supabase")
@@ -371,8 +379,7 @@ def _create_schema(conn: sqlite3.Connection):
     conn.execute("""
         CREATE VIRTUAL TABLE stops_fts USING fts5(
             sid UNINDEXED,
-            name,
-            tokenize='porter'
+            name
         )
     """)
 
