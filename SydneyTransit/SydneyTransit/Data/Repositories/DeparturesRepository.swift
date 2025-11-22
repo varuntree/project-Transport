@@ -143,6 +143,12 @@ class DeparturesRepositoryImpl: DeparturesRepository {
             // Offline fallback: query bundled GRDB (no time/direction filtering support)
             let departures = try DatabaseManager.shared.getDepartures(stopId: stopId, limit: limit)
 
+            // CRITICAL FIX: If offline data is empty, don't hide the API error.
+            // Re-throw so UI shows "Network Error" instead of "No departures".
+            if departures.isEmpty {
+                throw error
+            }
+
             // Return DeparturesPage with offline data (disable pagination)
             return DeparturesPage(
                 departures: departures,
