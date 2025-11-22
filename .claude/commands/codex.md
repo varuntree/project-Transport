@@ -7,8 +7,9 @@ Delegate tasks to Codex CLI (`codex exec`) for autonomous, non-interactive execu
 **Before executing this command, remember:**
 1. ✅ **Codex CLI is already installed** on this system - do NOT ask the user about installation
 2. ✅ **Always run in background** - Codex exec will complete on its own, no timeout monitoring needed
-3. ✅ **Continuous logs are captured** - stderr streams to `.workflow-logs/active/codex/{session}/live-log.txt` in real-time
-4. ✅ **Let it finish** - Codex will exit when done, you can monitor with BashOutput tool
+3. ✅ **Continuous logs are captured** - outputs to `.workflow-logs/active/codex/{session}/live-log.jsonl` in real-time
+4. ✅ **Format is JSONL** - newline-delimited JSON events with syntax highlighting for readability
+5. ✅ **Let it finish** - Codex will exit when done, you can monitor with BashOutput tool
 
 ## Usage
 
@@ -369,9 +370,8 @@ else
   exec_mode="full-auto"
 fi
 
-if [ "$use_json" = true ]; then
-  exec_flags="${exec_flags} --json"
-fi
+# Always use --json for structured output with syntax highlighting
+exec_flags="${exec_flags} --json"
 
 if [ "$sandbox_mode" != "workspace-write" ]; then
   exec_flags="${exec_flags} --sandbox ${sandbox_mode}"
@@ -390,10 +390,11 @@ echo ""
 ### 3.2 Execute Codex
 
 ```bash
-# Prepare live log file for continuous streaming
-live_log="${codex_dir}/live-log.txt"
+# Prepare live log file for continuous streaming (JSONL format)
+live_log="${codex_dir}/live-log.jsonl"
 
 # Invoke Codex CLI with continuous log capture
+# --json outputs newline-delimited JSON events (JSONL)
 # 2>&1 redirects stderr to stdout, | tee captures to file while displaying
 codex exec \
   ${exec_flags} \
@@ -409,7 +410,8 @@ codex_exit_code=${PIPESTATUS[0]}
 
 echo ""
 echo "📝 Live log saved to: ${live_log}"
-echo "   (Continuously updated during execution)"
+echo "   (JSONL format - newline-delimited JSON with syntax highlighting)"
+echo "   Open in code editor for syntax highlighting"
 ```
 
 ---
@@ -535,10 +537,12 @@ codex exec resume {codex-session-id}
 - Prioritizes task-relevant files
 
 **Continuous Logging:**
-- All stderr/stdout captured to `live-log.txt` in real-time via `tee`
-- Monitor progress: `tail -f .workflow-logs/active/codex/{session}/live-log.txt`
-- Includes all commands executed, thinking blocks, file reads, errors
-- Useful for debugging long-running executions
+- All events captured to `live-log.jsonl` in real-time via `tee` + `--json`
+- **JSONL format:** Newline-delimited JSON events (one JSON object per line)
+- **Syntax highlighting:** Open in VS Code or any editor with JSON support
+- Monitor progress: `tail -f .workflow-logs/active/codex/{session}/live-log.jsonl`
+- Includes all commands executed, thinking blocks, file reads, errors as structured events
+- Useful for debugging long-running executions with readable, highlighted output
 
 **Integration with Slash Commands:**
 
