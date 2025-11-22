@@ -1,6 +1,6 @@
-"""GTFS-RT Poller Task - Checkpoint 2.
+"""GTFS-RT Poller Task - Checkpoint 2 + Phase 2.2 ServiceAlerts.
 
-Polls NSW Transport API every 30s for 5 modes × 2 feeds (VehiclePositions + TripUpdates).
+Polls NSW Transport API every 30s for 5 modes × 3 feeds (VehiclePositions + TripUpdates + ServiceAlerts).
 Caches gzipped JSON blobs in Redis with 75s/90s TTL.
 
 Architecture:
@@ -12,13 +12,19 @@ Architecture:
 NSW API Endpoints (from NSW_API_REFERENCE.md):
 - VehiclePositions: /v1/gtfs/vehiclepos/{mode} OR /v2/gtfs/vehiclepos/{mode}
 - TripUpdates: /v1/gtfs/realtime/{mode} OR /v2/gtfs/realtime/{mode}
+- ServiceAlerts: /v2/gtfs/alerts/{mode} (v1 deprecated June 2022)
 
 Modes:
-- buses: /v1/gtfs/vehiclepos/buses, /v1/gtfs/realtime/buses
-- sydneytrains: /v2/gtfs/vehiclepos/sydneytrains, /v2/gtfs/realtime/sydneytrains
-- metro: /v2/gtfs/vehiclepos/metro, /v2/gtfs/realtime/metro
-- ferries: /v1/gtfs/vehiclepos/ferries/sydneyferries, /v1/gtfs/realtime/ferries/sydneyferries
-- lightrail: /v1/gtfs/vehiclepos/lightrail, /v1/gtfs/realtime/lightrail
+- buses: /v1/gtfs/vehiclepos/buses, /v1/gtfs/realtime/buses, /v2/gtfs/alerts/buses
+- sydneytrains: /v2/gtfs/vehiclepos/sydneytrains, /v2/gtfs/realtime/sydneytrains, /v2/gtfs/alerts/sydneytrains
+- metro: /v2/gtfs/vehiclepos/metro, /v2/gtfs/realtime/metro, /v2/gtfs/alerts/metro
+- ferries: /v1/gtfs/vehiclepos/ferries/sydneyferries, /v1/gtfs/realtime/ferries/sydneyferries, /v2/gtfs/alerts/ferries
+- lightrail: /v1/gtfs/vehiclepos/lightrail, /v1/gtfs/realtime/lightrail, /v2/gtfs/alerts/lightrail
+
+Cache keys:
+- vp:{mode}:v1 (TTL 75s) - Vehicle positions
+- tu:{mode}:v1 (TTL 90s) - Trip updates
+- sa:{mode}:v1 (TTL 90s) - Service alerts
 """
 
 import os
@@ -213,6 +219,79 @@ def parse_trip_updates(pb_data: bytes) -> list[dict]:
         return []
 
 
+def parse_service_alerts(pb_data: bytes) -> list[dict]:
+    """Parse ServiceAlert protobuf into JSON-serializable dicts.
+
+    Args:
+        pb_data: Protobuf binary data
+
+    Returns:
+        List of service alert dicts
+    """
+    try:
+        feed = gtfs_realtime_pb2.FeedMessage()
+        feed.ParseFromString(pb_data)
+
+        alerts = []
+        for entity in feed.entity:
+            if not entity.HasField("alert"):
+                continue
+
+            alert = entity.alert
+
+            # Extract header text (required field)
+            header_text = ""
+            if alert.header_text.translation:
+                header_text = alert.header_text.translation[0].text
+
+            # Extract description text (optional)
+            description_text = None
+            if alert.description_text.translation:
+                description_text = alert.description_text.translation[0].text
+
+            # Extract active periods
+            active_period = []
+            for period in alert.active_period:
+                active_period.append({
+                    "start": period.start if period.HasField("start") else None,
+                    "end": period.end if period.HasField("end") else None,
+                })
+
+            # Extract informed entities
+            informed_entity = []
+            for ie in alert.informed_entity:
+                entity_data = {
+                    "agency_id": ie.agency_id if ie.HasField("agency_id") else None,
+                    "route_id": ie.route_id if ie.HasField("route_id") else None,
+                    "route_type": ie.route_type if ie.HasField("route_type") else None,
+                    "stop_id": ie.stop_id if ie.HasField("stop_id") else None,
+                }
+                # Extract trip descriptor if present
+                if ie.HasField("trip"):
+                    entity_data["trip"] = {"trip_id": ie.trip.trip_id}
+                else:
+                    entity_data["trip"] = None
+
+                informed_entity.append(entity_data)
+
+            alert_data = {
+                "id": entity.id,
+                "header_text": header_text,
+                "description_text": description_text,
+                "effect": alert.Effect.Name(alert.effect) if alert.HasField("effect") else None,
+                "cause": alert.Cause.Name(alert.cause) if alert.HasField("cause") else None,
+                "active_period": active_period,
+                "informed_entity": informed_entity,
+                "severity_level": alert.SeverityLevel.Name(alert.severity_level) if alert.HasField("severity_level") else None,
+            }
+            alerts.append(alert_data)
+
+        return alerts
+    except Exception as exc:
+        logger.error("parse_service_alerts_error", error=str(exc))
+        return []
+
+
 def cache_blob(redis_client: redis.Redis, key: str, data: list, ttl: int) -> bool:
     """Cache gzipped JSON blob in Redis.
 
@@ -246,12 +325,13 @@ def cache_blob(redis_client: redis.Redis, key: str, data: list, ttl: int) -> boo
 def poll_gtfs_rt(self):
     """Poll NSW GTFS-RT feeds for all modes.
 
-    Fetches VehiclePositions and TripUpdates for 5 modes (10 API calls total).
+    Fetches VehiclePositions, TripUpdates, and ServiceAlerts for 5 modes (15 API calls total).
     Uses Redis SETNX lock for idempotency.
 
     Cache keys:
-    - vp:{mode}:v1 (TTL 75s)
-    - tu:{mode}:v1 (TTL 90s)
+    - vp:{mode}:v1 (TTL 75s) - Vehicle positions
+    - tu:{mode}:v1 (TTL 90s) - Trip updates
+    - sa:{mode}:v1 (TTL 90s) - Service alerts
     """
     start_time = time.time()
     redis_client = get_redis_client()
@@ -292,6 +372,48 @@ def poll_gtfs_rt(self):
                         tu_count += len(parsed_tu)
                         logger.debug("tu_cached", mode=mode, count=len(parsed_tu), key=cache_key)
 
+        # Fetch ServiceAlerts (v2 API, per-mode endpoints)
+        # Map mode names to NSW API alert endpoint format
+        alert_mode_map = {
+            "buses": "buses",
+            "sydneytrains": "sydneytrains",
+            "metro": "metro",
+            "ferries": "ferries",  # Combined endpoint for all ferry operators
+            "lightrail": "lightrail",
+        }
+
+        sa_count = 0
+        for mode, alert_mode in alert_mode_map.items():
+            try:
+                # Fetch from NSW API v2 alerts endpoint
+                url = f"{NSW_BASE_URL}/v2/gtfs/alerts/{alert_mode}"
+                headers = {
+                    "Authorization": f"apikey {NSW_API_KEY}",
+                    "Accept": "application/x-google-protobuf",
+                }
+
+                response = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
+                response.raise_for_status()
+
+                # Parse alerts
+                parsed_alerts = parse_service_alerts(response.content)
+
+                if parsed_alerts:
+                    # Compress + cache in Redis with 90s TTL
+                    cache_key = f"sa:{mode}:v1"
+                    if cache_blob(redis_client, cache_key, parsed_alerts, ttl=90):
+                        sa_count += len(parsed_alerts)
+                        logger.debug("sa_cached", mode=mode, count=len(parsed_alerts), key=cache_key)
+
+            except requests.Timeout:
+                logger.warning("alert_fetch_timeout", mode=mode, url=f"/v2/gtfs/alerts/{alert_mode}")
+            except requests.HTTPError as exc:
+                status_code = exc.response.status_code if exc.response else 0
+                logger.warning("alert_fetch_http_error", mode=mode, status_code=status_code)
+            except Exception as exc:
+                # Graceful degradation: log error but continue to next mode
+                logger.warning("alert_fetch_failed", mode=mode, error=str(exc))
+
         duration_ms = int((time.time() - start_time) * 1000)
         logger.info(
             "poll_gtfs_rt_complete",
@@ -299,6 +421,7 @@ def poll_gtfs_rt(self):
             duration_ms=duration_ms,
             vp_count=vp_count,
             tu_count=tu_count,
+            sa_count=sa_count,
         )
 
     except SoftTimeLimitExceeded:
