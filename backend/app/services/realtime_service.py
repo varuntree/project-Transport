@@ -311,6 +311,11 @@ def get_realtime_departures(
             # Get wheelchair_accessible from static GTFS (0=unknown, 1=accessible, 2=not accessible)
             wheelchair_accessible = dep.get('wheelchair_accessible', 0)
 
+            # Calculate minutes until (centralized logic)
+            # Use time_secs_local (request time) vs realtime_time_secs
+            secs_remaining = realtime_time_secs - time_secs_local
+            minutes_until = max(0, secs_remaining // 60)
+
             departures.append({
                 'trip_id': trip_id,
                 'route_short_name': dep['route_short_name'],
@@ -320,6 +325,7 @@ def get_realtime_departures(
                 'headsign': dep['trip_headsign'],
                 'scheduled_time_secs': scheduled_time_secs,
                 'realtime_time_secs': realtime_time_secs,
+                'minutes_until': minutes_until,  # New centralized field
                 'delay_s': delay_s,
                 'realtime': delay_s != 0,
                 'stop_sequence': dep['stop_sequence'],

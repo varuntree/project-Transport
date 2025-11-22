@@ -7,6 +7,7 @@ struct Departure: Codable, Identifiable, Hashable {
     let headsign: String
     let scheduledTimeSecs: Int
     let realtimeTimeSecs: Int
+    let minutesUntil: Int  // Centralized from backend
     let delayS: Int
     let realtime: Bool
     let platform: String?
@@ -16,33 +17,18 @@ struct Departure: Codable, Identifiable, Hashable {
     // Unique ID: trip can visit same stop multiple times, so use trip_id + scheduled_time
     var id: String { "\(tripId)_\(scheduledTimeSecs)" }
 
-    // Computed: minutes until departure (from now)
-    var minutesUntil: Int {
-        let secsRemaining = realtimeTimeSecs - currentSydneySecondsSinceMidnight
-        return max(0, secsRemaining / 60)
-    }
-
     // Computed: user-facing countdown text
     var minutesUntilText: String {
-        let secsRemaining = realtimeTimeSecs - currentSydneySecondsSinceMidnight
-        if secsRemaining < -59 {
-            let minsAgo = (abs(secsRemaining) + 30) / 60
-            return "\(minsAgo) min ago"
-        } else if secsRemaining < 0 {
+        // Logic centralized in backend, this is just formatting
+        if minutesUntil == 0 {
+            // Check if it's actually "Now" or "Left already"
+            // For simplicity, if backend says 0, we show "Now" or "Due"
+            // But wait, if delayS is negative (early), minutesUntil might be 0 even if early?
+            // Backend: max(0, remaining // 60). So negatives become 0.
             return "Now"
         } else {
-            let mins = max(1, Int(ceil(Double(secsRemaining) / 60.0)))
-            return "\(mins) min"
+            return "\(minutesUntil) min"
         }
-    }
-
-    private var currentSydneySecondsSinceMidnight: Int {
-        let sydney = TimeZone(identifier: "Australia/Sydney")!
-        let now = Date()
-        var calendar = Calendar.current
-        calendar.timeZone = sydney
-        let midnight = calendar.startOfDay(for: now)
-        return Int(now.timeIntervalSince(midnight))
     }
 
     // Computed: delay text ('On time', 'X min early', '+X min')
@@ -112,6 +98,7 @@ struct Departure: Codable, Identifiable, Hashable {
         case headsign
         case scheduledTimeSecs = "scheduled_time_secs"
         case realtimeTimeSecs = "realtime_time_secs"
+        case minutesUntil = "minutes_until"
         case delayS = "delay_s"
         case realtime
         case platform
@@ -126,6 +113,7 @@ struct Departure: Codable, Identifiable, Hashable {
         headsign: String,
         scheduledTimeSecs: Int,
         realtimeTimeSecs: Int,
+        minutesUntil: Int,
         delayS: Int,
         realtime: Bool,
         platform: String?,
@@ -137,6 +125,7 @@ struct Departure: Codable, Identifiable, Hashable {
         self.headsign = headsign
         self.scheduledTimeSecs = scheduledTimeSecs
         self.realtimeTimeSecs = realtimeTimeSecs
+        self.minutesUntil = minutesUntil
         self.delayS = delayS
         self.realtime = realtime
         self.platform = platform
@@ -162,6 +151,7 @@ struct Departure: Codable, Identifiable, Hashable {
         // realtime_time_secs may be omitted for purely static data; default to scheduled time
         realtimeTimeSecs = try container.decodeIfPresent(Int.self, forKey: .realtimeTimeSecs) ?? scheduled
 
+        minutesUntil = try container.decodeIfPresent(Int.self, forKey: .minutesUntil) ?? 0
         delayS = try container.decodeIfPresent(Int.self, forKey: .delayS) ?? 0
         realtime = try container.decodeIfPresent(Bool.self, forKey: .realtime) ?? (delayS != 0)
 

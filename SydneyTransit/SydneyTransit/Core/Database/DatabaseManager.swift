@@ -252,6 +252,10 @@ class DatabaseManager {
                 .prefix(limit)
                 .map { row in
                     let sched = row.actualDepartureSecs
+                    // Centralized logic for offline mode too
+                    let secsRemaining = sched - timeSecs
+                    let minutesUntil = max(0, secsRemaining / 60)
+                    
                     return Departure(
                         tripId: row.tripId,
                         routeShortName: row.routeShortName ?? "",
