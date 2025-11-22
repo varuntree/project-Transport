@@ -130,9 +130,9 @@ def get_trip_details(trip_id: str) -> dict:
                                 # Store platform if available
                                 if stu.get('platform_code'):
                                     trip_platforms[stop_id] = stu['platform_code']
-                                # Store delay if available
-                                if stu.get('delay_s') is not None:
-                                    trip_delays[stop_id] = stu['delay_s']
+                                # Store arrival_delay if available
+                                if stu.get('arrival_delay') is not None:
+                                    trip_delays[stop_id] = stu['arrival_delay']
                         break
 
                 logger.debug("trip_realtime_data_fetched", trip_id=trip_id, mode=mode, platforms_count=len(trip_platforms))
@@ -148,6 +148,7 @@ def get_trip_details(trip_id: str) -> dict:
 
         # Step 4: Build stops list with real-time data merged
         stops = []
+        stops_with_delays = 0
         for ps in pattern_stops:
             stop_id = ps['stop_id']
             # Convert offset from trip start into an absolute time-of-day
@@ -155,9 +156,8 @@ def get_trip_details(trip_id: str) -> dict:
             #
             # Schema guarantee: arrival_offset_secs is "seconds from trip start_time"
             # (see schemas/migrations/001_initial_schema.sql).
-            arrival_secs = trip_start_secs + ps['arrival_offset_secs']
-            delay_s = trip_delays.get(stop_id, 0)
-            realtime_arrival_secs = arrival_secs + delay_s
+            scheduled_arrival_secs = trip_start_secs + ps['arrival_offset_secs']
+            delay_s = trip_delays.get(stop_id)  # None if no RT data
 
             # Extract coordinates (PostGIS: lat = Y, lon = X)
             stop_lat = ps.get('stop_lat', 0.0)
@@ -177,15 +177,25 @@ def get_trip_details(trip_id: str) -> dict:
                 has_coords=has_coords
             )
 
-            stops.append({
+            # Build stop dict with backward-compatible RT fields
+            stop_dict = {
                 'stop_id': stop_id,
                 'stop_name': ps['stop_name'],
-                'arrival_time_secs': realtime_arrival_secs,
+                'arrival_time_secs': scheduled_arrival_secs,  # Static scheduled time
                 'lat': float(stop_lat) if stop_lat else 0.0,
                 'lon': float(stop_lon) if stop_lon else 0.0,
                 'platform': trip_platforms.get(stop_id),
                 'wheelchair_accessible': ps.get('wheelchair_boarding', 0)
-            })
+            }
+
+            # Add RT fields only if delay data exists (backward compatibility)
+            if delay_s is not None:
+                stop_dict['delay_s'] = delay_s
+                stop_dict['realtime'] = True
+                stop_dict['realtime_arrival_time_secs'] = scheduled_arrival_secs + delay_s
+                stops_with_delays += 1
+
+            stops.append(stop_dict)
 
         stops_with_coords = sum(1 for s in stops if s['lat'] and s['lon'])
         duration_ms = int((time.time() - start_time) * 1000)
@@ -193,6 +203,7 @@ def get_trip_details(trip_id: str) -> dict:
             "trip_details_fetched",
             trip_id=trip_id,
             stops_count=len(stops),
+            stops_with_delays=stops_with_delays,
             duration_ms=duration_ms
         )
         logger.info(

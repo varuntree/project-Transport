@@ -35,11 +35,27 @@ struct TripStop: Codable, Identifiable {
     let lat: Double?
     let lon: Double?
 
+    // Real-time fields (optional, backward-compatible)
+    let delayS: Int?
+    let realtime: Bool?
+    let realtimeArrivalTimeSecs: Int?
+
     var id: String { stopId }
 
-    // Computed: formatted arrival time (HH:mm)
+    // Computed: arrival time to display (RT if available, else scheduled)
+    var displayArrivalTimeSecs: Int {
+        return realtimeArrivalTimeSecs ?? arrivalTimeSecs
+    }
+
+    // Computed: is this stop delayed?
+    var isDelayed: Bool {
+        guard let delay = delayS else { return false }
+        return abs(delay) > 60  // More than 1 minute
+    }
+
+    // Computed: formatted arrival time (HH:mm) - uses displayArrivalTimeSecs
     var arrivalTime: String {
-        let mins = arrivalTimeSecs / 60
+        let mins = displayArrivalTimeSecs / 60
         let hours = mins / 60
         let remainingMins = mins % 60
         return String(format: "%02d:%02d", hours, remainingMins)
@@ -53,5 +69,8 @@ struct TripStop: Codable, Identifiable {
         case wheelchairAccessible = "wheelchair_accessible"
         case lat
         case lon
+        case delayS = "delay_s"
+        case realtime
+        case realtimeArrivalTimeSecs = "realtime_arrival_time_secs"
     }
 }
