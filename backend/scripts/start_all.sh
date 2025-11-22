@@ -57,8 +57,39 @@ fi
 echo "Starting all backend services..."
 echo ""
 
+# Check if Redis is running
+echo "[0/4] Checking Redis..."
+if ! redis-cli ping >/dev/null 2>&1; then
+    echo "  ⚠ Redis not running - attempting to start..."
+    if command -v brew >/dev/null 2>&1; then
+        brew services start redis >/dev/null 2>&1
+        sleep 2
+        if redis-cli ping >/dev/null 2>&1; then
+            echo "  ✓ Redis started successfully"
+        else
+            echo "  ✗ Failed to start Redis"
+            echo ""
+            echo "ERROR: Redis is required for GTFS-RT caching (Phase 2.2)"
+            echo "Install: brew install redis"
+            echo "Start:   brew services start redis"
+            exit 1
+        fi
+    else
+        echo "  ✗ Redis not running and Homebrew not found"
+        echo ""
+        echo "ERROR: Redis is required for GTFS-RT caching (Phase 2.2)"
+        echo "Install: brew install redis"
+        echo "Start:   brew services start redis"
+        exit 1
+    fi
+else
+    echo "  ✓ Redis already running"
+fi
+
+echo ""
+
 # Start FastAPI
-echo "[1/4] Starting FastAPI..."
+echo "[1/5] Starting FastAPI..."
 nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 > /dev/null 2>&1 &
 echo $! > "$PID_DIR/fastapi.pid"
 echo "  ✓ FastAPI started (PID: $(cat $PID_DIR/fastapi.pid))"
@@ -69,7 +100,7 @@ sleep 1
 
 # Start Celery Worker - Critical Queue
 echo ""
-echo "[2/4] Starting Celery Worker (Critical Queue)..."
+echo "[2/5] Starting Celery Worker (Critical Queue)..."
 nohup celery -A app.tasks.celery_app worker -Q critical --pool=solo --loglevel=info > /dev/null 2>&1 &
 echo $! > "$PID_DIR/worker_critical.pid"
 echo "  ✓ Critical worker started (PID: $(cat $PID_DIR/worker_critical.pid))"
@@ -80,7 +111,7 @@ sleep 1
 
 # Start Celery Worker - Normal + Batch Queues
 echo ""
-echo "[3/4] Starting Celery Worker (Normal + Batch Queues)..."
+echo "[3/5] Starting Celery Worker (Normal + Batch Queues)..."
 nohup celery -A app.tasks.celery_app worker -Q normal,batch --pool=solo --loglevel=info > /dev/null 2>&1 &
 echo $! > "$PID_DIR/worker_service.pid"
 echo "  ✓ Service worker started (PID: $(cat $PID_DIR/worker_service.pid))"
@@ -91,7 +122,7 @@ sleep 1
 
 # Start Celery Beat
 echo ""
-echo "[4/4] Starting Celery Beat (Scheduler)..."
+echo "[4/5] Starting Celery Beat (Scheduler)..."
 nohup celery -A app.tasks.celery_app beat --loglevel=info --schedule "$SCHEDULE_FILE" > /dev/null 2>&1 &
 echo $! > "$PID_DIR/beat.pid"
 echo "  ✓ Beat scheduler started (PID: $(cat $PID_DIR/beat.pid))"
