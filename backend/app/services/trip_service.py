@@ -44,53 +44,58 @@ def get_trip_details(trip_id: str) -> dict:
         supabase = get_supabase()
         redis_binary = get_redis_binary()
 
-        # Step 1: Query trip metadata + pattern
-        trip_query = f"""
-        SELECT
-            t.trip_id,
-            t.trip_headsign,
-            t.pattern_id,
-            t.wheelchair_accessible AS trip_wheelchair_accessible,
-            t.start_time_secs,
-            r.route_id,
-            r.route_short_name,
-            r.route_color
-        FROM trips t
-        JOIN routes r ON t.route_id = r.route_id
-        WHERE t.trip_id = '{trip_id}'
-        LIMIT 1
-        """
+        # Step 1: Query trip metadata + route safely (no raw SQL)
+        trip_result = (
+            supabase
+            .table("trips")
+            .select("trip_id, trip_headsign, pattern_id, wheelchair_accessible, start_time_secs, route_id")
+            .eq("trip_id", trip_id)
+            .limit(1)
+            .execute()
+        )
+        trip_data = trip_result.data or []
 
-        trip_result = supabase.rpc("exec_raw_sql", {"query": trip_query}).execute()
-        trip_data = trip_result.data
-
-        if not trip_data or len(trip_data) == 0:
+        if not trip_data:
             raise ValueError(f"Trip {trip_id} not found")
 
         trip = trip_data[0]
-        pattern_id = trip['pattern_id']
-        route_id = trip['route_id']
+        pattern_id = trip["pattern_id"]
+        route_id = trip["route_id"]
         # start_time_secs can be NULL for some legacy rows; default to 0 in that case.
-        trip_start_secs = trip.get('start_time_secs') or 0
+        trip_start_secs = trip.get("start_time_secs") or 0
 
-        # Step 2: Query pattern_stops → stops for stop sequence
-        pattern_query = f"""
-        SELECT
-            ps.stop_sequence,
-            ps.stop_id,
-            ps.arrival_offset_secs,
-            s.stop_name,
-            s.stop_lat,
-            s.stop_lon,
-            s.wheelchair_boarding
-        FROM pattern_stops ps
-        JOIN stops s ON ps.stop_id = s.stop_id
-        WHERE ps.pattern_id = '{pattern_id}'
-        ORDER BY ps.stop_sequence ASC
-        """
+        route_result = (
+            supabase
+            .table("routes")
+            .select("route_short_name, route_color")
+            .eq("route_id", route_id)
+            .limit(1)
+            .execute()
+        )
+        route_data = (route_result.data or [{}])[0]
 
-        pattern_result = supabase.rpc("exec_raw_sql", {"query": pattern_query}).execute()
+        # Step 2: Query pattern_stops then bulk fetch stop details
+        pattern_result = (
+            supabase
+            .table("pattern_stops")
+            .select("stop_sequence, stop_id, arrival_offset_secs")
+            .eq("pattern_id", pattern_id)
+            .order("stop_sequence", ascending=True)
+            .execute()
+        )
         pattern_stops = pattern_result.data or []
+
+        stops_lookup: Dict[str, dict] = {}
+        if pattern_stops:
+            stop_ids = [ps["stop_id"] for ps in pattern_stops]
+            stops_result = (
+                supabase
+                .table("stops")
+                .select("stop_id, stop_name, stop_lat, stop_lon, wheelchair_boarding")
+                .in_("stop_id", stop_ids)
+                .execute()
+            )
+            stops_lookup = {s["stop_id"]: s for s in (stops_result.data or [])}
 
         if not pattern_stops:
             logger.warning("trip_no_pattern_stops", trip_id=trip_id, pattern_id=pattern_id)
@@ -150,42 +155,42 @@ def get_trip_details(trip_id: str) -> dict:
         stops = []
         stops_with_delays = 0
         for ps in pattern_stops:
-            stop_id = ps['stop_id']
+            stop_id = ps["stop_id"]
             # Convert offset from trip start into an absolute time-of-day
             # so iOS can format it as HH:mm, consistent with departures list.
             #
             # Schema guarantee: arrival_offset_secs is "seconds from trip start_time"
             # (see schemas/migrations/001_initial_schema.sql).
-            scheduled_arrival_secs = trip_start_secs + ps['arrival_offset_secs']
+            scheduled_arrival_secs = trip_start_secs + ps["arrival_offset_secs"]
             delay_s = trip_delays.get(stop_id)  # None if no RT data
 
             # Extract coordinates (PostGIS: lat = Y, lon = X)
-            stop_lat = ps.get('stop_lat', 0.0)
-            stop_lon = ps.get('stop_lon', 0.0)
+            stop_data = stops_lookup.get(stop_id, {})
+            raw_lat = stop_data.get("stop_lat")
+            raw_lon = stop_data.get("stop_lon")
 
-            # Log warning if coordinates missing
-            if stop_lat == 0.0 or stop_lon == 0.0:
+            has_coords = raw_lat not in (None, 0, 0.0) and raw_lon not in (None, 0, 0.0)
+            if not has_coords:
                 logger.warning("stop_coordinates_missing", stop_id=stop_id, trip_id=trip_id)
 
-            has_coords = stop_lat != 0.0 and stop_lon != 0.0
             logger.debug(
                 "trip_stop_coords",
                 trip_id=trip_id,
                 stop_id=stop_id,
-                lat=stop_lat,
-                lon=stop_lon,
+                lat=raw_lat,
+                lon=raw_lon,
                 has_coords=has_coords
             )
 
             # Build stop dict with backward-compatible RT fields
             stop_dict = {
-                'stop_id': stop_id,
-                'stop_name': ps['stop_name'],
-                'arrival_time_secs': scheduled_arrival_secs,  # Static scheduled time
-                'lat': float(stop_lat) if stop_lat else 0.0,
-                'lon': float(stop_lon) if stop_lon else 0.0,
-                'platform': trip_platforms.get(stop_id),
-                'wheelchair_accessible': ps.get('wheelchair_boarding', 0)
+                "stop_id": stop_id,
+                "stop_name": stop_data.get("stop_name", ""),
+                "arrival_time_secs": scheduled_arrival_secs,  # Static scheduled time
+                "lat": float(raw_lat) if has_coords else None,
+                "lon": float(raw_lon) if has_coords else None,
+                "platform": trip_platforms.get(stop_id),
+                "wheelchair_accessible": stop_data.get("wheelchair_boarding", 0),
             }
 
             # Add RT fields only if delay data exists (backward compatibility)
@@ -217,8 +222,8 @@ def get_trip_details(trip_id: str) -> dict:
         return {
             'trip_id': trip_id,
             'route': {
-                'short_name': trip['route_short_name'],
-                'color': trip.get('route_color')
+                'short_name': route_data.get('route_short_name', ''),
+                'color': route_data.get('route_color')
             },
             'headsign': trip['trip_headsign'] or '',
             'stops': stops

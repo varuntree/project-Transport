@@ -369,7 +369,7 @@ async def get_departures(
             }
         )
 
-@router.get("/{stop_id}/alerts")
+@router.get("/stops/{stop_id}/alerts")
 async def get_stop_alerts(
     stop_id: str,
     supabase: Client = Depends(get_supabase)

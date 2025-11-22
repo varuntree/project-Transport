@@ -2,6 +2,14 @@
 
 Delegate tasks to Codex CLI (`codex exec`) for autonomous, non-interactive execution. Packages context, invokes Codex with full automation, captures results.
 
+## ⚠️ IMPORTANT: Pre-Execution Reminders for Claude
+
+**Before executing this command, remember:**
+1. ✅ **Codex CLI is already installed** on this system - do NOT ask the user about installation
+2. ✅ **Always run in background** - Codex exec will complete on its own, no timeout monitoring needed
+3. ✅ **Continuous logs are captured** - stderr streams to `.workflow-logs/active/codex/{session}/live-log.txt` in real-time
+4. ✅ **Let it finish** - Codex will exit when done, you can monitor with BashOutput tool
+
 ## Usage
 
 ```
@@ -207,23 +215,25 @@ cat > "${prompt_file}" << 'PROMPT_EOF'
 You have access to these orchestrator commands (invoke via shell):
 
 **Planning:**
-- `/plan-phase {N}` - Create phase implementation plan
-- `/plan "{task}"` - Create custom task plan
+- `.claude/commands/plan-phase` {N} - Create phase implementation plan
+- `.claude/commands/plan` "{task}" - Create custom task plan
 
 **Execution:**
-- `/implement-phase {N}` - Execute phase via checkpoints
-- `/implement {plan-name}` - Execute custom plan
+- `.claude/commands/implement-phase` {N} - Execute phase via checkpoints
+- `.claude/commands/implement` {plan-name} - Execute custom plan
 
 **Quality:**
-- `/review [scope]` - Multi-panel review (5 specialized agents)
-- `/test {backend|validation|all}` - Run test suites
+- `.claude/commands/review` [scope] - Multi-panel review (5 specialized agents)
+- `.claude/commands/test` {backend|validation|all} - Run test suites
 
 **Bug Handling:**
-- `/bug "{description}"` - 4-stage diagnosis + fix
-- `/fix-bug {phase} {checkpoint} {type}` - Fix validation failures
+- `.claude/commands/bug` "{description}" - 4-stage diagnosis + fix
+- `.claude/commands/fix-bug` {phase} {checkpoint} {type} - Fix validation failures
 
 **Orchestration:**
-- `/workflow "{task}"` - Auto-route to appropriate workflow
+- `.claude/commands/workflow` "{task}" - Auto-route to appropriate workflow
+
+**NOTE:** These are the actual file paths where slash commands are defined. When instructing Codex to invoke them, use these full paths.
 
 {if any slash commands included in context}
 ## Slash Command Documentation
@@ -262,7 +272,8 @@ You have access to these orchestrator commands (invoke via shell):
 
 1. You are running in **Codex CLI executive mode** (non-interactive, autonomous)
 2. You can:
-   - Use any slash commands (invoke via shell: `bash -c "/plan ..."`  or use SlashCommand tool if available)
+   - Use any slash commands via FULL PATHS: `.claude/commands/review`, `.claude/commands/test`, etc.
+   - Slash commands are markdown files, NOT executables - use full relative paths
    - Read/write files as needed
    - Run git commands (status, diff, log - but **NEVER commit/push**)
    - Execute tests, validations
@@ -278,6 +289,7 @@ You have access to these orchestrator commands (invoke via shell):
    - Push to remote
    - Install new services/dependencies (stack is fixed)
    - Skip validation/testing
+   - Use `/review` syntax - use `.claude/commands/review` instead
 
 **Expected Output:**
 
@@ -378,17 +390,26 @@ echo ""
 ### 3.2 Execute Codex
 
 ```bash
-# Invoke Codex CLI
+# Prepare live log file for continuous streaming
+live_log="${codex_dir}/live-log.txt"
+
+# Invoke Codex CLI with continuous log capture
+# 2>&1 redirects stderr to stdout, | tee captures to file while displaying
 codex exec \
   ${exec_flags} \
   --cd /Users/varunprasad/code/prjs/prj_transport \
   --output-last-message "${output_file}" \
-  "$(cat ${prompt_file})"
+  "$(cat ${prompt_file})" \
+  2>&1 | tee "${live_log}"
 
-codex_exit_code=$?
+codex_exit_code=${PIPESTATUS[0]}
 
 # Capture session ID if available
 # (Codex may print session ID to stderr/stdout)
+
+echo ""
+echo "📝 Live log saved to: ${live_log}"
+echo "   (Continuously updated during execution)"
 ```
 
 ---
@@ -406,7 +427,8 @@ echo "{
   \"flags_used\": \"${exec_flags}\",
   \"exit_code\": ${codex_exit_code},
   \"output_file\": \"${output_file}\",
-  \"prompt_file\": \"${prompt_file}\"
+  \"prompt_file\": \"${prompt_file}\",
+  \"live_log\": \"${live_log}\"
 }" > "${codex_dir}/metadata.json"
 ```
 
@@ -450,6 +472,7 @@ echo ""
 echo "📁 Session Files:"
 echo "   Prompt: ${prompt_file}"
 echo "   Output: ${output_file}"
+echo "   Live Log: ${live_log}"
 echo "   Metadata: ${codex_dir}/metadata.json"
 echo ""
 
@@ -511,17 +534,25 @@ codex exec resume {codex-session-id}
 - Targets <50K tokens (Codex context window)
 - Prioritizes task-relevant files
 
+**Continuous Logging:**
+- All stderr/stdout captured to `live-log.txt` in real-time via `tee`
+- Monitor progress: `tail -f .workflow-logs/active/codex/{session}/live-log.txt`
+- Includes all commands executed, thinking blocks, file reads, errors
+- Useful for debugging long-running executions
+
 **Integration with Slash Commands:**
 
-Codex can invoke other slash commands:
+Codex can invoke other slash commands using FULL PATHS:
 ```
 /codex "run review and fix all P0 issues"
-→ Codex executes: /review
+→ Codex executes: .claude/commands/review
 → Codex parses: review report
 → Codex implements: P0 fixes
-→ Codex re-runs: /review to verify
+→ Codex re-runs: .claude/commands/review to verify
 → Returns: Complete report
 ```
+
+**IMPORTANT:** Slash commands are NOT executable binaries. They are markdown files in `.claude/commands/`. Codex must be instructed to use FULL PATHS when referencing them.
 
 **Use Cases:**
 - Autonomous workflows: `/codex "implement phase 2"`

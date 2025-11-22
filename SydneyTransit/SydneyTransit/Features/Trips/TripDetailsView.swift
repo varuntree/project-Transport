@@ -29,7 +29,10 @@ struct TripDetailsView: View {
     
     private var mapStops: [TripStop] {
         guard let trip = viewModel.trip else { return [] }
-        return trip.stops.filter { $0.lat != nil && $0.lon != nil }
+        return trip.stops.filter { stop in
+            guard let lat = stop.lat, let lon = stop.lon else { return false }
+            return lat != 0 && lon != 0
+        }
     }
 }
 
