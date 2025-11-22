@@ -1,0 +1,19 @@
+{
+  "created": "2025-11-22T00:00:00Z",
+  "last_updated": "2025-11-22T00:00:00Z",
+  "version": "2.0",
+  "sessions": {
+    "plans": [],
+    "implementations": [],
+    "bugs": [],
+    "reviews": [],
+    "oracle_exports": []
+  },
+  "stats": {
+    "total_plans_created": 0,
+    "total_implementations_complete": 0,
+    "total_bugs_fixed": 0,
+    "total_reviews_run": 0,
+    "total_oracle_exports": 0
+  }
+}

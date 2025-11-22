@@ -1,6 +1,6 @@
-# Implement Custom Plan
+# Implement Plan
 
-Execute implementation through direct orchestrator pattern for any custom plan (not phase-specific). Orchestrator designs and implements all checkpoints end-to-end while maintaining plan context.
+Execute implementation through direct checkpoint-by-checkpoint pattern. Orchestrator implements all checkpoints with full context continuity.
 
 ## Variables
 
@@ -8,392 +8,178 @@ plan_name: $1 (required: name of plan from /plan command)
 
 ## Instructions
 
-**IMPORTANT: Think hard. Use reasoning mode for orchestration decisions.**
+**IMPORTANT: Think hard. Use reasoning mode for implementation decisions.**
 
 ---
 
-## Architecture
+## Stage 1: Load Plan
 
-**Orchestrator (Main Agent - Direct Implementation):**
-- Maintains full plan context (grows from ~5K → ~15-25K as checkpoints complete)
-- Creates detailed designs for ALL checkpoints upfront
-- Implements each checkpoint directly with full context continuity
-- Validates implementation, commits to git atomically
-- Sees all prior work - builds correctly first time
-
----
-
-## Stage 1: Load Plan Context
-
-**Orchestrator loads (lightweight):**
-
-1. **Plan file:**
-   ```bash
-   cat specs/{plan_name}-plan.md
-   ```
-   (~2K tokens - checkpoint structure)
-
-2. **Exploration report:**
-   ```bash
-   cat .workflow-logs/active/custom/{plan_name}/exploration-report.json
-   ```
-   (~2K tokens - compressed reference)
-
-3. **iOS research (if exists):**
-   ```bash
-   # Check research summary
-   cat .workflow-logs/active/custom/{plan_name}/ios-research-summary.json 2>/dev/null || echo "No iOS research"
-
-   # Load research files referenced in checkpoints (on-demand)
-   # Do NOT load all at once - load per checkpoint as needed
-   ```
-
-**Initial orchestrator context: ~5K tokens (grows as checkpoints complete)**
-
-**Log state:**
 ```bash
-echo '{"stage":"context_loaded","plan_name":"'{plan_name}'","exploration_tokens":2000,"plan_tokens":2000}' > .workflow-logs/active/custom/{plan_name}/orchestrator-state.json
+plan_name="$1"
+plan_file=".claude-logs/plans/${plan_name}/plan.md"
+implement_dir=".claude-logs/implement/${plan_name}"
+mkdir -p "${implement_dir}"
 ```
+
+### 1.1 Read Plan
+
+Read plan file and understand:
+- Problem statement
+- Affected systems
+- Key technical decisions
+- All checkpoints
+- Acceptance criteria
+
+### 1.2 Check Prerequisites
+
+- Clean git state (commit or stash changes)
+- Create implementation branch:
+  ```bash
+  git checkout -b ${plan_name}-implementation
+  ```
 
 ---
 
-## Stage 2: Verify Prerequisites
+## Stage 2: Execute Checkpoints
 
-**Orchestrator checks:**
+For each checkpoint in plan:
 
-1. **User blockers resolved:**
-   - Read `user_blockers` from plan file
-   - Verify external services configured
-   - If incomplete: STOP, report blocker
+### 2.1 Understand Checkpoint
 
-2. **Clean git state:**
-   ```bash
-   git status
-   # If dirty: commit or stash
-   git checkout -b {plan_name}-implementation
-   ```
-
-**If any prerequisite fails:** Report blocker to user, do NOT continue.
-
----
-
-## Stage 3: Create Detailed Designs (All Checkpoints)
-
-**Orchestrator designs BEFORE implementing:**
-
-For each checkpoint from implementation plan:
-
-### Design Template
-
-Create `.workflow-logs/active/custom/{plan_name}/checkpoint-{N}-design.md`:
-
-```markdown
-# Checkpoint {N}: <Name>
-
-## Goal
-<From plan: specific success criteria>
-
-## Approach
-<Orchestrator decides technical approach>
-
-### Backend Implementation
-- Use <library/pattern> for <functionality>
-- Files to create: <list with purposes>
-- Files to modify: <list with changes>
-- Critical pattern: <from exploration report critical_patterns>
-
-### iOS Implementation
-- Use <SwiftUI/GRDB pattern> for <functionality>
-- Files to create: <list with purposes>
-- Files to modify: <list with changes>
-- Reference iOS research: <path to research file>
-
-## Design Constraints
-<From plan + orchestrator additions>
-- Follow DEVELOPMENT_STANDARDS.md Section X for <pattern>
-- Achieve <performance/size target>
-- Handle errors: <specific approach>
-
-## Risks
-- <Potential issue 1>
-  - Mitigation: <How to avoid>
-- <Potential issue 2>
-  - Mitigation: <How to avoid>
-
-## Validation
-```bash
-<Command to verify checkpoint success>
-# Expected output: <specific result>
-```
-
-## Implementation References
-- Exploration report: `critical_patterns` → <specific pattern>
-- iOS research: `.workflow-logs/active/custom/{plan_name}/ios-research-<topic>.md`
-- Standards: DEVELOPMENT_STANDARDS.md:Section X
-- Architecture: <spec file>:Section Y
-- Previous checkpoint: <if depends on previous checkpoint result>
-```
-
-**Orchestrator creates designs for ALL checkpoints before starting execution.**
-
-**Why design first:**
-- See full plan picture (can optimize handoffs)
-- Identify cross-checkpoint dependencies
-- Catch design flaws before implementation
-
----
-
-## Stage 4: Execute Checkpoints (Direct Implementation)
-
-**For each checkpoint:**
-
-### 4.1 Load Checkpoint Design
-
-Read checkpoint design:
-```bash
-cat .workflow-logs/active/custom/{plan_name}/checkpoint-{N}-design.md
-```
-
-Review:
-- Goal and approach
-- Files to create/modify
-- Implementation references
+Read from plan:
+- Goal and success criteria
+- Backend work
+- iOS work
+- Design constraints
 - Validation command
-- Previous checkpoint context (if N > 1)
+- References
 
-### 4.2 Implement Checkpoint Directly
+Load any iOS research files referenced.
 
-**Orchestrator implements (with full context):**
+### 2.2 Implement Checkpoint
 
-1. **Confidence check BEFORE implementing:**
-   - Am I 80%+ confident this pattern/API is correct?
-   - iOS-specific code? → Read iOS research file from design references
-   - External service? → WebFetch/search official docs if uncertain
-   - NEVER hallucinate - if confidence <80%, READ the reference docs
+**Direct implementation with full context:**
 
-2. **Create/modify files per design:**
-   - Follow DEVELOPMENT_STANDARDS.md (logging, error handling, naming)
-   - Implement all files specified in design
-   - Use patterns from exploration report critical_patterns
-   - Reference previous checkpoint results for context handoff
+1. **Confidence Check:**
+   - 80%+ confident on approach?
+   - iOS work? Read referenced ios-research files
+   - External service? Research if needed
+   - NEVER hallucinate - research if uncertain
 
-3. **Self-validate as you go:**
-   - Does this match the design approach?
-   - Are all edge cases handled?
-   - Is logging/error handling included?
+2. **Create/Modify Files:**
+   - Follow DEVELOPMENT_STANDARDS.md patterns
+   - Implement all work specified in checkpoint
+   - Backend + iOS together
+   - Include logging, error handling, validation
 
-### 4.3 Validate Implementation
+3. **Self-Validate:**
+   - Does this match checkpoint goal?
+   - Edge cases handled?
+   - Standards followed?
 
-**Check correctness:**
+### 2.3 Validate Implementation
 
 1. **Verify files exist:**
    ```bash
-   ls -la <files created/modified>
+   ls -la {files created/modified}
    ```
 
-2. **Run validation command:**
+2. **Run validation command from plan:**
    ```bash
-   <validation command from checkpoint design>
-   # Compare output to expected result
+   {validation command}
+   # Compare to expected output
    ```
 
-3. **Compile check (if applicable):**
-   ```bash
-   # Backend
-   cd backend && python -m py_compile <files>
+3. **Compile check:**
+   - Backend: `cd backend && python -m py_compile {files}`
+   - iOS: Build in Xcode (if available)
 
-   # iOS (if Xcode available)
-   xcodebuild -scheme SydneyTransit -sdk iphonesimulator build
-   ```
+**If validation fails:** Fix directly (max 1 retry), then stop if still failing.
 
-**If validation fails:**
-- **Option 1:** Fix directly (max 1 retry attempt)
-- **Option 2:** Redesign checkpoint (create design-v2.md, re-implement)
-- **Option 3:** Escalate to user (true blocker - external dependency, unclear requirement)
-
-**Max 1 retry, then escalate to user.**
-
-### 4.4 Commit Checkpoint (Atomic)
+### 2.4 Commit Checkpoint
 
 ```bash
 git add .
 
-# Log checkpoint result
-echo '{
-  "checkpoint": '{checkpoint_number}',
-  "status": "complete",
-  "files_created": ["..."],
-  "files_modified": ["..."],
-  "validation_passed": true,
-  "next_checkpoint_context": "Critical info for next checkpoint"
-}' > .workflow-logs/active/custom/{plan_name}/checkpoint-{N}-result.json
+git commit -m "feat(${plan_name}): checkpoint {N} - {name}
 
-git add .workflow-logs/active/custom/{plan_name}/
+{Brief description}
 
-git commit -m "feat({plan_name}): checkpoint {N} - <name>
-
-<Brief description of what was implemented>
-
-Validation: <validation result>
-Files: <count> created, <count> modified
+Validation: {result}
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
 Co-Authored-By: Claude <noreply@anthropic.com>"
 
-# Tag checkpoint
-git tag {plan_name}-checkpoint-{N}
+git tag ${plan_name}-checkpoint-{N}
 ```
 
-### 4.5 Update State and Continue
-
-```bash
-# Update state for next checkpoint
-echo '{
-  "checkpoint_completed": '{checkpoint_number}',
-  "status": "complete",
-  "files_created": '<count>',
-  "next_checkpoint_context": "<critical info for next checkpoint>"
-}' >> .workflow-logs/active/custom/{plan_name}/orchestrator-state.json
-```
-
-**Repeat for next checkpoint** - load next design, implement, validate, commit.
+**Repeat for all checkpoints.**
 
 ---
 
-## Stage 5: Final Validation
+## Stage 3: Final Validation
 
-**After all checkpoints complete:**
+After all checkpoints complete:
 
-### 5.1 Run Full Acceptance Criteria
+### 3.1 Run Acceptance Criteria
 
-From implementation plan acceptance criteria:
+From plan, verify all acceptance criteria:
+- Backend endpoints working?
+- iOS features working?
+- Integration complete?
 
-```bash
-# Backend tests (if applicable)
-curl http://localhost:8000/health
-curl http://localhost:8000/api/v1/<endpoints from plan>
-
-# iOS tests (if applicable)
-# Xcode: Cmd+B (build), Cmd+R (run simulator)
-# Manual testing checklist from plan
-
-# Integration tests
-# Backend + iOS working together
-```
-
-**Document results:**
-```json
-{
-  "acceptance_criteria": [
-    {"criterion": "...", "passed": true, "notes": "..."},
-    {"criterion": "...", "passed": false, "error": "..."}
-  ]
-}
-```
-
-**If any criterion fails:**
-- Identify which checkpoint failed
-- Redesign + re-execute that checkpoint
-- Re-run full acceptance criteria
-
-**DO NOT proceed if tests fail.**
-
-### 5.2 Final Commit
+### 3.2 Final Commit
 
 ```bash
 git add .
-git commit -m "feat({plan_name}): complete implementation
+git commit -m "feat(${plan_name}): complete implementation
 
-All checkpoints: <N> completed
-Acceptance criteria: <X>/<Y> passed
-Files: <count> created, <count> modified
+All checkpoints: {N} completed
+Files: {count} created, {count} modified
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
 Co-Authored-By: Claude <noreply@anthropic.com>"
 
-git tag {plan_name}-complete
+git tag ${plan_name}-complete
 ```
 
 ---
 
-## Stage 6: Create Completion Report
+## Stage 4: Create Completion Report
 
-**Orchestrator generates:**
-
-`.workflow-logs/active/custom/{plan_name}/completion-report.json`:
-
-```json
-{
-  "plan_name": "{plan_name}",
-  "task_description": "{from exploration}",
-  "status": "complete|partial|blocked",
-  "checkpoints": [
-    {
-      "number": 1,
-      "name": "...",
-      "status": "complete",
-      "validation_passed": true,
-      "files_created": 5,
-      "commit": "abc123"
-    }
-  ],
-  "acceptance_criteria": {
-    "total": 5,
-    "passed": 5,
-    "failed": 0,
-    "details": [...]
-  },
-  "files_summary": {
-    "created": ["..."],
-    "modified": ["..."],
-    "total_changes": "+523 -45 lines"
-  },
-  "blockers_encountered": [],
-  "deviations_from_plan": [],
-  "ready_for_merge": true,
-  "recommendations": ["..."]
-}
-```
-
-**Human-readable report:**
+Write `.claude-logs/implement/{plan_name}/REPORT.md`:
 
 ```markdown
 # {Plan Name} Implementation Report
 
 **Status:** Complete
-**Duration:** <actual time>
 **Checkpoints:** {N} of {N} completed
+**Date:** {date}
 
 ---
 
 ## Implementation Summary
 
-**Task:** {task_description}
+**Task:** {from plan}
 
-**Backend:**
-- <Key change 1>
-- <Key change 2>
-
-**iOS:**
-- <Key change 1>
-- <Key change 2>
-
-**Integration:**
-- <How they connect>
+**Changes:**
+- Backend: {key changes}
+- iOS: {key changes}
+- Integration: {how they connect}
 
 ---
 
 ## Checkpoints
 
-### Checkpoint 1: <Name>
+### Checkpoint 1: {Name}
 - Status: ✅ Complete
 - Validation: Passed
-- Files: 5 created, 2 modified
-- Commit: abc123
+- Files: {list}
+- Commit: {hash}
 
-<Repeat for all checkpoints>
+{Repeat for all checkpoints}
 
 ---
 
@@ -402,115 +188,82 @@ git tag {plan_name}-complete
 - [x] Criterion 1 - Passed
 - [x] Criterion 2 - Passed
 - [x] Criterion 3 - Passed
-- [x] Criterion 4 - Passed
-- [x] Criterion 5 - Passed
 
-**Result: 5/5 passed**
+**Result:** {X}/{Y} passed
 
 ---
 
 ## Files Changed
 
 ```bash
-git diff --stat main..{plan_name}-implementation
+git diff --stat main..${plan_name}-implementation
 ```
 
-<Output>
+{Output}
 
 ---
 
 ## Blockers Encountered
 
-<List any blockers + resolutions>
-<Or "None">
+{List blockers + resolutions, or "None"}
 
 ---
 
 ## Deviations from Plan
 
-<List any changes + rationale>
-<Or "None - followed plan exactly">
-
----
-
-## Known Issues
-
-<List technical debt or issues>
-<Or "None">
+{List changes + rationale, or "None - followed plan exactly"}
 
 ---
 
 ## Ready for Merge
 
-**Status:** Yes
+**Status:** {Yes/No}
 
 **Next Steps:**
-1. User reviews report
-2. User merges: `git checkout main && git merge {plan_name}-implementation`
-3. Ready for next task
+1. Review: /review
+2. Merge: git checkout main && git merge ${plan_name}-implementation
+3. Tag: git tag -a ${plan_name}-released
 
 ---
 
-**Report Generated:** <timestamp>
-**Total Implementation Time:** <duration>
+**Report Generated:** {timestamp}
+**Branch:** ${plan_name}-implementation
+**Commits:** {count}
 ```
-
-Save to: `.workflow-logs/active/custom/{plan_name}/REPORT.md`
 
 ---
 
 ## Report to User
 
-Provide concise summary:
-
 ```
-{Plan Name} Implementation: Complete
+Implementation Complete: {plan_name}
 
 Checkpoints: {N}/{N} completed
 Acceptance Criteria: {X}/{Y} passed
 
-Backend:
-- <Key deliverable 1>
-- <Key deliverable 2>
+Changes:
+- Backend: {summary}
+- iOS: {summary}
 
-iOS:
-- <Key deliverable 1>
-- <Key deliverable 2>
+Files: {N} created, {M} modified
 
-Integration:
-- <How they connect>
+Blockers: {None or list}
+Deviations: {None or list}
 
-Files: <N> created, <M> modified (+<lines> -<lines>)
+Report: .claude-logs/implement/{plan_name}/REPORT.md
+Branch: ${plan_name}-implementation
 
-Blockers: <None or list>
-Deviations: <None or list>
+Ready for Merge: {Yes/No}
 
-Full Report: .workflow-logs/active/custom/{plan_name}/REPORT.md
-
-Ready for Merge: Yes/No
-<If No, explain what needs fixing>
-
-Next: Review report, then merge to main
+Next: /review
 ```
 
 ---
 
 ## Notes
 
-**Direct Implementation Benefits:**
-- Full context continuity (sees all prior checkpoints, builds correctly first time)
-- No information loss between checkpoints (understands dependencies implicitly)
-- Simpler execution (no task packaging, JSON parsing, or subagent coordination)
-- Clean git history (atomic commits per checkpoint with full result logs)
-- Higher reliability (no "subagent assumed wrong context" failures)
-
-**Token Management:**
-- Orchestrator context: ~5K → ~15-25K total (grows incrementally per checkpoint)
-- Growth rate: ~2-4K per checkpoint (design + implementation + result)
-- Still manageable for plans with 5-8 checkpoints
-- For larger plans (10+ checkpoints): consider splitting into sub-plans
-
-**Cost vs Quality:**
-- Single Sonnet session (vs multiple subagent invocations) = lower cost
-- Context continuity → fewer mistakes → less rework
-- Trade-off: Optimizing for both reliability AND cost efficiency
+- No subagents - direct implementation
+- Full context continuity across checkpoints
+- Markdown only (no JSON)
+- Atomic commits per checkpoint
+- Single folder: .claude-logs/implement/{plan_name}/

@@ -1,258 +1,119 @@
 # Workflow Orchestrator
 
-Autonomous task router that understands user intent, reconstructs task description, analyzes requirements, and automatically executes the appropriate workflow.
+Autonomous task router that analyzes user intent, classifies task type, and automatically routes to appropriate workflow commands.
 
-**⚠️ CRITICAL: This command is an ORCHESTRATOR ONLY**
+**⚠️ CRITICAL: This command is ORCHESTRATOR ONLY**
 
-**Your role:** Analyze task → Route to appropriate command → **INVOKE** that command using `SlashCommand` tool
+**Your role:** Analyze task → Route to appropriate command → **INVOKE** using `SlashCommand` tool
 
 **You do NOT:** Execute planning, implementation, testing, or bug fixing yourself
 
-**You MUST:** Use `SlashCommand` tool to invoke `/plan`, `/implement`, `/test`, `/bug`, etc.
-
-**Example:**
-```
-User: "add caching for patterns"
-
-✅ CORRECT:
-1. Analyze: Feature addition, medium complexity
-2. Route: /plan → /implement → /test
-3. Invoke: SlashCommand tool with "/plan \"Implement caching for patterns\""
-4. Wait for /plan to complete
-5. Invoke: SlashCommand tool with "/implement {plan-name}"
-6. Wait for /implement to complete
-7. Invoke: SlashCommand tool with "/test all"
-
-❌ WRONG:
-1. Analyze task
-2. Read codebase yourself
-3. Create plan yourself
-4. Write code yourself
-(This defeats the purpose of composable commands)
-```
+**You MUST:** Use `SlashCommand` tool to invoke other commands
 
 ---
 
 ## Usage
 
 ```
-/workflow "celery alert matcher uses too much memory"
-/workflow "add caching for route patterns"
+/workflow "add caching for patterns"
 /workflow "iOS map view not showing annotations"
-/workflow "implement phase 3"
+/workflow "implement better error handling for GTFS parsing"
 ```
 
 ## Variables
 
-task_input: $1 (required: raw user description of task - can be rough/unclear)
+task_input: $1 (required: raw user description - can be rough/unclear)
 
 ## Instructions
 
-**IMPORTANT: Think hard. Activate reasoning mode for understanding user intent and routing decisions.**
+**IMPORTANT: Think hard. Activate reasoning mode for understanding intent.**
 
 ---
 
-## Stage 1: Understand & Reconstruct Task
-
-**Purpose:** Extract true user intent, fix unclear phrasing, reconstruct as clear task description.
+## Stage 1: Understand Intent
 
 ### 1.1 Parse User Input
 
-**Analyze raw input:**
+Analyze raw input:
+- What is user trying to accomplish?
+- Bug fix, feature, optimization, refactor?
+- Which systems mentioned?
+- Underlying problem or goal?
 
+### 1.2 Reconstruct Clear Task
+
+Fix grammar, expand abbreviations, make intent explicit:
+
+**Examples:**
 ```
-Raw input: "$1"
+"celery thing broken memory"
+→ "Fix memory leak in Celery task worker"
 
-Questions to answer:
-1. What is the user trying to accomplish?
-2. Is this a bug fix, feature addition, optimization, refactor, or phase work?
-3. Are there ambiguous terms or unclear requirements?
-4. What systems/components are mentioned?
-5. What is the underlying problem or goal?
-```
+"add cache for patterns"
+→ "Implement caching layer for GTFS pattern queries"
 
-### 1.2 Reconstruct Task Description
-
-**Create clear, unambiguous task description:**
-
-```
-Reconstruction rules:
-- Fix grammar/spelling
-- Expand abbreviations/slang
-- Make implicit intent explicit
-- Add missing context (infer from keywords)
-- Remove unnecessary details
-- Keep technical terms precise
-
-Examples:
-Input: "celery thing broken memory"
-→ Reconstructed: "Fix memory leak in Celery task worker"
-
-Input: "add cache thing for patterns"
-→ Reconstructed: "Implement caching layer for GTFS pattern queries"
-
-Input: "map not work"
-→ Reconstructed: "Debug iOS MapKit view not displaying annotations"
-
-Input: "do phase 3"
-→ Reconstructed: "Implement Phase 3 from implementation roadmap"
+"map not work"
+→ "Debug iOS MapKit view not displaying annotations"
 ```
 
-**Save reconstructed task:**
-```bash
-reconstructed_task="<reconstructed description>"
-timestamp=$(date +%s)
-workflow_log_dir=".workflow-logs/active/workflows/${timestamp}"
-mkdir -p "${workflow_log_dir}"
-echo "User input: $1" > "${workflow_log_dir}/analysis.txt"
-echo "Reconstructed: $reconstructed_task" >> "${workflow_log_dir}/analysis.txt"
-```
+### 1.3 Classify Task Type
 
----
+**Keyword patterns:**
 
-## Stage 2: Analyze & Classify
-
-**Purpose:** Determine task type, scope, complexity, and route to appropriate workflow.
-
-### 2.1 Keyword Analysis
-
-**Extract keywords and classify:**
-
-```
-Keyword patterns:
-
-BUG/FIX INDICATORS:
+**BUG/FIX:**
 - fix, bug, broken, failing, error, crash, leak, issue
 - not working, doesn't work, stopped working
-- regression, broke after
 → Classification: BUG_FIX
 
-FEATURE INDICATORS:
+**FEATURE:**
 - add, implement, create, new, build
 - feature, functionality, capability
 - support for, enable
 → Classification: FEATURE
 
-OPTIMIZATION INDICATORS:
+**OPTIMIZATION:**
 - optimize, improve, faster, performance
 - reduce, decrease (memory/latency/size)
 - cache, index, batch
 → Classification: OPTIMIZATION
 
-REFACTOR INDICATORS:
+**REFACTOR:**
 - refactor, cleanup, reorganize, restructure
 - extract, consolidate, simplify
-- technical debt, code quality
 → Classification: REFACTOR
 
-PHASE INDICATORS:
-- phase <number>, phase-<number>
-- implement phase, phase work
-- roadmap phase
-→ Classification: PHASE_WORK
+---
 
-TEST INDICATORS:
-- test, verify, validate, check
-- ensure, confirm
-→ Classification: TEST
-```
+## Stage 2: Determine Scope & Complexity
 
-**Determine primary classification:**
-```
-task_type = <highest confidence classification>
-confidence = 0.0-1.0
-```
+### 2.1 Identify Affected Systems
 
-### 2.2 Scope Detection
+From task keywords, determine:
+- Backend API?
+- iOS App?
+- Data layer?
+- Documentation?
 
-**Search codebase for affected systems:**
+### 2.2 Estimate Complexity
 
+**Factors:**
+- Number of systems affected
+- Number of files likely changed
+- New patterns required?
+
+**Complexity:**
+- Simple: 1 system, <5 files, existing patterns
+- Medium: 2 systems, 5-10 files, minor new patterns
+- Complex: 3+ systems, >10 files, major architecture
+
+### 2.3 Check Existing Work
+
+Look for existing plan:
 ```bash
-# Extract technical keywords (ignore common words)
-keywords=$(echo "$reconstructed_task" | grep -oE '\b[A-Za-z]{4,}\b' | tr '[:upper:]' '[:lower:]' | sort -u)
+plan_slug=$(echo "{reconstructed_task}" | tr '[:upper:]' '[:lower:]' | tr -s ' ' '-' | tr -cd '[:alnum:]-' | cut -c1-60)
 
-# Search backend
-backend_matches=$(echo "$keywords" | xargs -I {} grep -r -l {} backend/app/ 2>/dev/null | wc -l)
-
-# Search iOS (if applicable)
-ios_matches=$(echo "$keywords" | xargs -I {} grep -r -l {} SydneyTransit/ 2>/dev/null | wc -l)
-
-# Determine layers
-if [ $backend_matches -gt 0 ] && [ $ios_matches -gt 0 ]; then
-  layers="backend,ios"
-elif [ $backend_matches -gt 0 ]; then
-  layers="backend"
-elif [ $ios_matches -gt 0 ]; then
-  layers="ios"
-else
-  layers="unknown"
-fi
-
-# Count affected files
-total_files=$((backend_matches + ios_matches))
-```
-
-### 2.3 Complexity Scoring
-
-**Calculate complexity score (1-10):**
-
-```
-Factors:
-1. Number of affected files:
-   - <3 files: +1
-   - 3-8 files: +3
-   - >8 files: +5
-
-2. Number of layers:
-   - 1 layer: +1
-   - 2 layers: +3
-   - 3+ layers: +5
-
-3. Task type complexity:
-   - BUG_FIX: +1
-   - OPTIMIZATION: +2
-   - FEATURE: +3
-   - REFACTOR: +4
-
-4. New patterns required:
-   - Existing patterns only: +0
-   - Minor new patterns: +2
-   - Major new architecture: +4
-
-Complexity score = sum of factors
-Complexity level:
-- 1-3: simple
-- 4-6: medium
-- 7-10: complex
-```
-
-### 2.4 Check Existing Artifacts
-
-**Look for existing plans/work:**
-
-```bash
-# Check for existing custom plan with similar name
-plan_slug=$(echo "$reconstructed_task" | tr '[:upper:]' '[:lower:]' | tr -s ' ' '-' | tr -cd '[:alnum:]-' | cut -c1-60)
-
-if [ -f "plans/${plan_slug}-plan.md" ]; then
-  existing_plan="plans/${plan_slug}-plan.md"
-  plan_status="exists"
-else
-  existing_plan=""
-  plan_status="none"
-fi
-
-# Check for phase work
-if [[ "$reconstructed_task" =~ [Pp]hase[[:space:]]+([0-9]+) ]]; then
-  phase_number="${BASH_REMATCH[1]}"
-  if [ -f "docs/phases/PHASE_${phase_number}_*.md" ]; then
-    phase_spec="exists"
-  else
-    phase_spec="missing"
-  fi
-else
-  phase_number=""
-  phase_spec="n/a"
+if [ -f ".claude-logs/plans/${plan_slug}/plan.md" ]; then
+  existing_plan=true
 fi
 ```
 
@@ -260,243 +121,177 @@ fi
 
 ## Stage 3: Route to Workflow
 
-**Purpose:** Determine which command(s) to execute automatically.
-
-### 3.1 Decision Tree
+### 3.1 Decision Logic
 
 ```
-IF task_type == "PHASE_WORK" AND phase_spec == "exists":
-  workflow = "phase"
-  commands = ["/plan-phase ${phase_number}", "/implement-phase ${phase_number}", "/test all"]
-
-ELSE IF task_type == "BUG_FIX":
+IF task_type == "BUG_FIX":
   workflow = "bug"
-  commands = ["/bug \"${reconstructed_task}\""]
+  commands = ["/bug \"{reconstructed_task}\""]
 
-ELSE IF task_type == "TEST":
-  workflow = "test"
-  commands = ["/test all"]
-
-ELSE IF existing_plan AND plan_status == "exists":
+ELSE IF existing_plan:
   workflow = "implement_existing"
-  commands = ["/implement ${plan_slug}", "/test validation"]
+  commands = ["/implement {plan_slug}"]
 
 ELSE IF task_type IN ["FEATURE", "OPTIMIZATION", "REFACTOR"]:
-  workflow = "plan_implement"
-  commands = ["/plan \"${reconstructed_task}\"", "/implement ${plan_slug}", "/test all"]
+  workflow = "plan_implement_review"
+  commands = [
+    "/plan \"{reconstructed_task}\"",
+    "/implement {plan_slug}",
+    "/review {plan_slug}"
+  ]
 
 ELSE:
   workflow = "unknown"
   # Ask user for clarification
 ```
 
-### 3.2 Ambiguity Check
+### 3.2 Confidence Check
 
-**Determine if user confirmation needed:**
+Ask user if:
+- Confidence <70% on task understanding
+- Destructive operation (schema changes, deletions)
+- Multiple valid interpretations
+- Cannot determine workflow
 
-```
-ask_user = false
-
-IF confidence < 0.70:
-  ask_user = true
-  reason = "Low confidence in task understanding"
-
-IF complexity_level == "complex" AND destructive_potential:
-  ask_user = true
-  reason = "High-risk operation requires confirmation"
-
-IF workflow == "unknown":
-  ask_user = true
-  reason = "Cannot determine appropriate workflow"
-
-IF multiple_valid_interpretations:
-  ask_user = true
-  reason = "Task description ambiguous, multiple interpretations possible"
-```
-
-**Destructive potential check:**
-```
-Destructive indicators:
-- delete, drop, remove, truncate (on database/tables)
-- refactor, migrate (large scale)
+**Destructive indicators:**
+- delete, drop, remove, truncate (on DB/tables)
 - schema change, breaking change
-```
+- large-scale refactor/migration
 
 ---
 
-## Stage 4: Execute Workflow (Autonomous)
+## Stage 4: Execute Workflow
 
-**Purpose:** Automatically invoke appropriate commands without asking user (unless ambiguous).
+**CRITICAL: Use SlashCommand tool to invoke each command.**
 
-### 4.1 If User Confirmation Not Needed
+### 4.1 If Confident (No User Confirmation Needed)
 
-**Execute workflow automatically:**
-
-**Step 1: Report analysis to user:**
 ```
 Task Analysis:
 - Input: {raw input}
 - Reconstructed: {reconstructed_task}
 - Type: {task_type}
-- Scope: {total_files} files across {layers}
-- Complexity: {complexity_level} ({complexity_score}/10)
+- Scope: {systems affected}
+- Complexity: {simple|medium|complex}
 
-Workflow Selected: {workflow}
-- Commands: {commands to execute}
+Workflow: {workflow}
+- Commands: {list commands}
 - Reasoning: {why this workflow}
 
 Executing automatically...
-```
 
-**Step 2: Execute commands sequentially using SlashCommand tool:**
+---
 
-**CRITICAL: You MUST use the SlashCommand tool to invoke each command. Do NOT execute the work yourself.**
-
-```
 FOR EACH command IN commands:
 
-  Report to user: "→ Running: {command}"
+  Report: "→ Running: {command}"
 
-  # INVOKE THE COMMAND USING SlashCommand TOOL
+  # INVOKE USING SlashCommand TOOL
   SlashCommand tool:
   - command: "{command}"
 
-  # Wait for command to complete and return result
-  # The command will do all the work (planning, implementation, testing, etc.)
+  # Wait for completion
 
-  # Check if command succeeded
-  IF command returned error or failure status:
-    Report to user:
-    "❌ Command failed: {command}
+  IF command failed:
+    Report: "❌ Command failed: {command}
 
-    Error: {error details}
+    Error: {details}
 
-    Stopping workflow execution.
+    Stopping workflow.
 
-    Recommendation: {how to fix or next steps}"
+    Recommendation: {how to fix}"
 
-    STOP execution (do not continue to next command)
+    STOP
 
   ELSE:
-    Report to user:
-    "✅ Command completed: {command}
+    Report: "✅ Command completed: {command}
 
-    Result: {brief summary of what command did}"
+    Result: {summary}"
 
-    Continue to next command
+    Continue
 
-ENDFOR
-
-# After all commands complete successfully:
-Report to user:
-"✅ Workflow Complete
+# After all complete:
+Report: "✅ Workflow Complete
 
 Commands executed:
-{list all commands with checkmarks}
+{list with checkmarks}
 
-Overall result:
-{aggregate summary of what was accomplished}
+Result: {aggregate summary}
 
-Next steps:
-{if all passed: 'Ready to merge to main'}
-{if any issues: 'Review outputs and address issues'}"
+Next: {next steps}"
 ```
 
-**Examples of correct SlashCommand invocation:**
+**Examples of SlashCommand invocation:**
 
 ```
-# Example 1: Bug workflow
+# Bug workflow
 SlashCommand tool:
-- command: "/bug \"Fix memory leak in Celery alert matcher task\""
+- command: "/bug \"Fix memory leak in Celery alert matcher\""
 
-# Example 2: Plan + Implement + Test workflow
-# Command 1:
+# Plan + Implement + Review workflow
 SlashCommand tool:
-- command: "/plan \"Implement Redis caching layer for GTFS patterns\""
+- command: "/plan \"Implement Redis caching for GTFS patterns\""
 
-# (wait for /plan to complete, then:)
-# Command 2:
+# (wait, then:)
 SlashCommand tool:
 - command: "/implement redis-caching-gtfs-patterns"
 
-# (wait for /implement to complete, then:)
-# Command 3:
+# (wait, then:)
 SlashCommand tool:
-- command: "/test all"
-
-# Example 3: Phase workflow
-SlashCommand tool:
-- command: "/plan-phase 2"
-
-# (wait for completion, then:)
-SlashCommand tool:
-- command: "/implement-phase 2"
-
-# (wait for completion, then:)
-SlashCommand tool:
-- command: "/test all"
+- command: "/review redis-caching-gtfs-patterns"
 ```
 
-### 4.2 If User Confirmation Needed
-
-**Ask user before executing:**
+### 4.2 If Uncertain (User Confirmation Required)
 
 ```
-Report to user:
----
 Task Analysis:
 - Input: {raw input}
 - Reconstructed: {reconstructed_task}
 - Type: {task_type}
-- Scope: {total_files} files across {layers}
-- Complexity: {complexity_level} ({complexity_score}/10)
+- Scope: {systems}
+- Complexity: {level}
 
 ⚠️ Confirmation Required
-Reason: {reason for asking}
+Reason: {why asking}
 
 Recommended Workflow: {workflow}
-- Commands: {commands to execute}
-- Reasoning: {why this workflow}
+- Commands: {list}
+- Reasoning: {why}
 
-Alternative Options:
-1. {alternative workflow 1 if applicable}
-2. {alternative workflow 2 if applicable}
-3. Manual workflow (you specify commands)
-4. Refine task description
+Alternatives:
+1. {alternative if applicable}
+2. Manual workflow (you specify commands)
+3. Refine task description
 
-Please confirm:
-- Execute recommended workflow? (yes/no)
-- OR specify alternative/manual commands
+Confirm:
+- Execute recommended? (yes/no)
+- OR specify alternative commands
 - OR provide clarification
+
 ---
 
 Wait for user response
 
 IF user confirms:
-  # Execute workflow using SlashCommand tool (same as 4.1)
-  # Invoke each command in sequence using SlashCommand tool
+  # Execute using SlashCommand tool (same as 4.1)
 
-ELSE IF user specifies alternative commands:
-  # Execute user-specified commands using SlashCommand tool
-  FOR EACH command IN user_specified_commands:
+ELSE IF user specifies commands:
+  FOR EACH command IN user_commands:
     SlashCommand tool:
     - command: "{command}"
 
-ELSE IF user provides clarification:
-  # Re-run Stage 1-3 with clarified input
-  # Start over from task understanding with new information
+ELSE IF user clarifies:
+  # Re-run from Stage 1 with new info
 
 ELSE:
-  STOP, wait for further instructions
+  STOP, wait for instructions
 ```
-
-**CRITICAL REMINDER: When user confirms or specifies commands, you MUST use SlashCommand tool to invoke them. Do NOT do the work yourself.**
 
 ---
 
-## Stage 5: Report Completion
+## Report Format
 
-**Provide comprehensive summary:**
+After workflow execution:
 
 ```markdown
 # Workflow Execution Report
@@ -510,43 +305,33 @@ ELSE:
 
 **Classification:**
 - Type: {task_type}
-- Complexity: {complexity_level} ({complexity_score}/10)
-- Scope: {total_files} files, {layers} layers
-- Confidence: {confidence}
+- Complexity: {level}
+- Scope: {systems affected}
+- Confidence: {0-100%}
 
-**Workflow Selected:** {workflow}
-
-**Commands Executed:**
-{list commands with timestamps}
+**Workflow:** {workflow}
 
 ---
 
-## Results
+## Commands Executed
 
-### Command 1: {command}
-- Status: {✅ Success | ❌ Failed}
-- Duration: {duration}
-- Output: {summary}
-- Details: {link to detailed output}
+1. {command} - {✅ Success | ❌ Failed} ({duration})
+   - Result: {summary}
+   - Details: {link to output}
 
-### Command 2: {command}
-- Status: {✅ Success | ❌ Failed}
-- Duration: {duration}
-- Output: {summary}
-- Details: {link to detailed output}
+2. {command} - {✅ Success | ❌ Failed} ({duration})
+   - Result: {summary}
 
 ---
 
 ## Overall Status
 
-{✅ Workflow completed successfully}
-{❌ Workflow failed at: {command}}
+{✅ Workflow completed | ❌ Workflow failed at: {command}}
 
-**Artifacts Created:**
-- Plans: {list plan files}
-- Commits: {list git commits}
-- Test reports: {list test reports}
-- Other: {list other artifacts}
+**Artifacts:**
+- Plans: {list}
+- Commits: {list}
+- Reports: {list}
 
 ---
 
@@ -554,176 +339,111 @@ ELSE:
 
 {If success}
 ✅ Implementation complete
-- Review commits: {git log commands}
-- Merge to main: git merge {branch}
-- Close task
+- Review commits: git log
+- Merge: git merge {branch}
 
 {If failure}
 ❌ Workflow incomplete
 - Failed at: {command}
-- Error: {error description}
-- Recommendation: {how to fix}
-- Retry: /workflow "{task}" (after fixing blocker)
+- Error: {description}
+- Fix: {recommendation}
+- Retry: /workflow "{task}"
 
 ---
 
 **Total Duration:** {duration}
-**Workflow Log:** .workflow-logs/active/workflows/{timestamp}/analysis.txt
 ```
 
 ---
 
 ## Examples
 
-### Example 1: Bug Fix (Autonomous)
+### Example 1: Bug (Auto)
 
 ```
 User: "celery alert matcher uses too much memory"
 
-Workflow analysis:
-- Reconstructed: "Fix memory leak in Celery alert matcher task"
-- Type: BUG_FIX (confidence: 0.95)
-- Scope: 3 backend files (backend/app/tasks/)
-- Complexity: medium (5/10)
-- Workflow: bug
-- Ambiguity: No
+Analysis:
+- Type: BUG_FIX (0.95)
+- Scope: Backend
+- Complexity: medium
 
-Autonomous execution:
+Workflow: bug
+
 → /bug "Fix memory leak in Celery alert matcher task"
-  → 4-stage diagnosis
-  → Root cause: Query loads all rows
-  → Fix: Add LIMIT 1000 + pagination
-  → Commit: abc123
+  ✅ Complete (12 min)
+  - Root cause: Query loads all rows
+  - Fix: Add LIMIT + pagination
+  - Commit: abc123
 
-✅ Complete (12 minutes)
+✅ Workflow Complete
 ```
 
-### Example 2: Feature (Autonomous)
+### Example 2: Feature (Auto)
 
 ```
 User: "add cache for route patterns"
 
-Workflow analysis:
-- Reconstructed: "Implement Redis caching layer for GTFS route pattern queries"
-- Type: FEATURE (confidence: 0.88)
-- Scope: 5 backend files
-- Complexity: medium (6/10)
-- Workflow: plan_implement
-- Ambiguity: No
+Analysis:
+- Type: FEATURE (0.88)
+- Scope: Backend
+- Complexity: medium
 
-Autonomous execution:
-→ /plan "Implement Redis caching layer for GTFS route pattern queries"
-  → Exploration + planning
-  → Plan: plans/redis-caching-route-patterns-plan.md
+Workflow: plan_implement_review
 
-→ /implement redis-caching-route-patterns
-  → 3 checkpoints executed
-  → Commits: abc123, def456, ghi789
+→ /plan "Implement Redis caching for GTFS patterns"
+  ✅ Complete (5 min)
+  - Plan: .claude-logs/plans/redis-caching-gtfs-patterns/plan.md
 
-→ /test all
-  → Backend: 12/12 passed
-  → Validation: 3/3 passed
+→ /implement redis-caching-gtfs-patterns
+  ✅ Complete (30 min)
+  - 3 checkpoints
+  - Commits: abc123, def456, ghi789
 
-✅ Complete (45 minutes)
+→ /review redis-caching-gtfs-patterns
+  ✅ Complete (3 min)
+  - Health: Green
+  - 0 P0, 2 P1
+
+✅ Workflow Complete
 ```
 
-### Example 3: Phase Work (Autonomous)
-
-```
-User: "implement phase 2"
-
-Workflow analysis:
-- Reconstructed: "Implement Phase 2 from implementation roadmap"
-- Type: PHASE_WORK (confidence: 1.0)
-- Phase: 2 (docs/phases/PHASE_2_*.md exists)
-- Complexity: complex (8/10)
-- Workflow: phase
-- Ambiguity: No
-
-Autonomous execution:
-→ /plan-phase 2
-  → Reads oracle spec
-  → Exploration + iOS research
-  → Plan: plans/phase-2-implementation-plan.md
-
-→ /implement-phase 2
-  → 5 checkpoints executed
-  → Commits: abc123, def456, ghi789, jkl012, mno345
-
-→ /test all
-  → Backend: 24/24 passed
-  → Validation: 5/5 passed
-
-✅ Complete (3 hours)
-```
-
-### Example 4: Ambiguous (Ask User)
+### Example 3: Ambiguous (Ask User)
 
 ```
 User: "make it faster"
 
-Workflow analysis:
-- Reconstructed: "Optimize application performance" (unclear target)
-- Type: OPTIMIZATION (confidence: 0.60)
-- Scope: Unknown (no specific keywords)
-- Complexity: unknown
-- Workflow: unknown
-- Ambiguity: YES (low confidence + unclear scope)
+Analysis:
+- Type: OPTIMIZATION (0.60)
+- Scope: Unknown
+- Confidence: LOW
 
-⚠️ Confirmation required:
+⚠️ Confirmation Required
+Reason: Task too vague
 
-Task description "make it faster" is too vague.
+"make it faster" unclear.
 
-Please clarify:
+Clarify:
 1. What needs to be faster?
-   - Backend API response times?
-   - iOS app UI rendering?
-   - Database query performance?
-   - GTFS data loading?
+   - Backend API?
+   - iOS UI?
+   - Database queries?
+   - GTFS loading?
 
 2. Current performance issue?
-   - Specific slow operation or page?
-   - Performance measurements?
+   - Specific slow operation?
+   - Measurements?
 
 3. Target performance?
-   - Response time target?
-   - Acceptable latency?
-
-Once clarified, I'll analyze and execute the appropriate workflow.
 ```
 
 ---
 
 ## Notes
 
-**Autonomous Execution:**
-- Executes automatically unless ambiguous or high-risk
-- No user confirmation needed for clear, low-risk tasks
-- Reduces friction, increases speed
-
-**User Confirmation Triggers:**
-- Confidence <70% on task understanding
-- Destructive operations (DB schema changes, deletes)
-- Complex tasks with multiple valid interpretations
-- Cannot determine workflow
-
-**Workflow Types:**
-- `phase`: /plan-phase → /implement-phase → /test
-- `bug`: /bug (4-stage diagnosis + fix)
-- `plan_implement`: /plan → /implement → /test
-- `test`: /test all
-- `implement_existing`: /implement (skip planning)
-
-**Intelligence:**
-- Reconstructs poor phrasing
-- Infers missing context
-- Searches codebase for scope
-- Calculates complexity
-- Routes to optimal workflow
-- Executes end-to-end
-
-**Safety:**
-- Asks before destructive operations
-- Stops on failures
-- Provides clear error messages
-- Recommends next steps
+- Autonomous execution (if confident)
+- User confirmation for ambiguous/risky
+- Uses SlashCommand tool exclusively
+- No direct implementation by orchestrator
+- Generalizes to any flow (not just bugs)
+- Adapts based on task classification

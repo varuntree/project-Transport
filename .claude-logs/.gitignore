@@ -1,0 +1,7 @@
+# Ignore all command logs (ephemeral artifacts)
+*
+
+# Exception: Keep the structure documentation
+!.gitignore
+!README.md
+!INDEX.json
